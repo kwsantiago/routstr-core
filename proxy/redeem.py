@@ -11,10 +11,10 @@ async def _initialize_wallet(mint_url: str) -> Wallet:
     """Initializes and loads a Cashu wallet."""
     wallet = await Wallet.with_db(
         mint_url,
-        db=os.path.join(settings.cashu_dir, "test"),
+        db=os.path.join(settings.cashu_dir, "temp"),
+        load_all_keysets=True,
     )
     await wallet.load_mint_info()
-    await wallet.activate_keyset()
     await wallet.load_proofs(reload=True)
     return wallet
 
