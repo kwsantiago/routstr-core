@@ -1,0 +1,13 @@
+[project]
+name = "routstr-proxy"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiosqlite>=0.20",
+    "cashu>=0.16",
+    "fastapi[standard]>=0.115",
+    "sqlmodel>=0.0.24",
+    "marshmallow<4.0",
+]
