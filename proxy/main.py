@@ -1,8 +1,10 @@
 import os
 from fastapi import FastAPI, Request, HTTPException
-import httpx
-from .auth import validate_api_key, pay_for_request
 from fastapi.responses import Response
+import httpx
+
+from .auth import validate_api_key, pay_for_request
+from .db import init_db
 
 UPSTREAM_BASE_URL = os.environ["UPSTREAM_BASE_URL"]
 UPSTREAM_API_KEY = os.environ.get("UPSTREAM_API_KEY", "")
@@ -74,9 +76,6 @@ async def proxy(request: Request, path: str):
             )
 
 
-if __name__ == "__main__":
-    import uvicorn
-
-    port = int(os.environ.get("PORT", 8000))
-    print(f"Starting server on 0.0.0.0:{port}")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+@app.on_event("startup")
+async def startup_event():
+    await init_db()
