@@ -1,0 +1,42 @@
+from contextlib import asynccontextmanager
+import os
+from typing import AsyncGenerator
+from sqlmodel import Field, SQLModel
+from sqlalchemy.ext.asyncio.engine import create_async_engine
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///keys.db")
+
+# These are needed here because validate_api_key and pay_for_request use them in auth.py
+# Consider passing these as arguments or managing config differently if needed
+RECIEIVE_LN_ADDRESS = os.environ["RECIEIVE_LN_ADDRESS"]
+COST_PER_REQUEST = int(os.environ["COST_PER_REQUEST"])
+
+engine = create_async_engine(DATABASE_URL, echo=False)  # echo=True for debugging SQL
+
+
+class ApiKey(SQLModel, table=True):  # type: ignore
+    __tablename__ = "api_keys"
+
+    hashed_key: str = Field(primary_key=True)
+    balance: int = Field(default=0)
+    total_spent: int = Field(default=0)
+    total_requests: int = Field(default=0)
+
+
+async def init_db() -> None:
+    """Initializes the database and creates tables if they don't exist."""
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+
+
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        yield session
+
+
+@asynccontextmanager
+async def create_session() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        yield session
