@@ -1,16 +1,23 @@
-FROM python:3.11-slim
-
-WORKDIR /app
+FROM ghcr.io/astral-sh/uv:python3.11-alpine
 
 # Install system dependencies required for secp256k1
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    build-essential \
+RUN apk add --no-cache \
+    pkgconf \
+    build-base \
     libsecp256k1-dev \
-    && rm -rf /var/lib/apt/lists/*
+    automake \
+    autoconf \
+    libtool \
+    m4 \
+    perl
+RUN apk add git
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY uv.lock pyproject.toml ./
+
+RUN uv add git+https://github.com/saschanaz/secp256k1-py.git#branch=upgrade060
+# RUN uv sync
+
+WORKDIR /app
 
 COPY . .
 
@@ -19,4 +26,4 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-CMD ["fastapi", "run", "proxy"]
+CMD ["/.venv/bin/fastapi", "run", "proxy"]
