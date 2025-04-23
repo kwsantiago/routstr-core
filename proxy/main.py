@@ -1,9 +1,10 @@
 import os
+import json
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import Response
 import httpx
 
-from .auth import validate_api_key, pay_for_request
+from .auth import validate_api_key, pay_for_request, adjust_payment_for_tokens
 from .db import init_db
 
 UPSTREAM_BASE_URL = os.environ["UPSTREAM_BASE_URL"]
@@ -54,13 +55,32 @@ async def proxy(request: Request, path: str):
                 timeout=30.0,
             )
 
-            print(f"Upstream response status: {rp.status_code}")
-
             # Filter response headers
             response_headers = dict(rp.headers)
             response_headers.pop("content-encoding", None)
             response_headers.pop("transfer-encoding", None)
             response_headers.pop("connection", None)
+
+            # Process token-based pricing if this is a chat completion response
+            print(f"Path: {path}")
+            if path.endswith("chat/completions") and rp.status_code == 200:
+                try:
+                    response_json = rp.json()
+                    # Adjust payment based on token usage
+                    cost_data = await adjust_payment_for_tokens(api_key, response_json)
+                    # Add cost data to the response
+                    response_json["cost"] = cost_data
+                    # Return the JSON response
+                    return Response(
+                        content=json.dumps(response_json).encode(),
+                        status_code=rp.status_code,
+                        headers=response_headers,
+                        media_type="application/json",
+                    )
+                except json.JSONDecodeError:
+                    print("Failed to parse JSON from upstream response")
+                except Exception as e:
+                    print(f"Error adjusting payment for tokens: {e}")
 
             # Return a streaming response or regular response based on upstream
             return Response(

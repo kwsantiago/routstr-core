@@ -1,9 +1,18 @@
 import hashlib
+from typing import Literal
 
 from fastapi import HTTPException
+from pydantic import BaseModel
 
 from .redeem import redeem
-from .db import ApiKey, create_session, RECIEIVE_LN_ADDRESS, COST_PER_REQUEST
+from .db import (
+    ApiKey,
+    create_session,
+    RECIEIVE_LN_ADDRESS,
+    COST_PER_REQUEST,
+    COST_PER_1K_PROMPT_TOKENS,
+    COST_PER_1K_COMPLETION_TOKENS,
+)
 
 
 def _hash_api_key(api_key: str) -> str:
@@ -35,9 +44,12 @@ async def validate_api_key(api_key: str) -> None:
                 )
                 # Redeem the original cashu key
                 amount = await redeem(api_key, RECIEIVE_LN_ADDRESS)
-                print(f"Redeemed successfully. Amount: {amount}")
+                amount_msats = amount * 1000  # Convert sats to msats
+                print(
+                    f"Redeemed successfully. Amount: {amount} sats ({amount_msats} msats)"
+                )
                 # Store the hash and the redeemed amount using SQLModel
-                new_key = ApiKey(hashed_key=hashed_key, balance=amount)
+                new_key = ApiKey(hashed_key=hashed_key, balance=amount_msats)
                 session.add(new_key)
                 await session.commit()
                 await session.refresh(new_key)
@@ -71,12 +83,128 @@ async def pay_for_request(api_key: str) -> None:
                 status_code=402, detail="Insufficient balance"
             )  # 402 Payment Required
 
-        # todo: COST_PER_INPUT_TOKENS + COST_PER_OUTPUT_TOKENS (like openai)
+        # Charge the base cost for the request
         key_record.balance -= COST_PER_REQUEST
+        key_record.total_spent += COST_PER_REQUEST
+        key_record.total_requests += 1
         session.add(key_record)  # Mark the object as changed
         await session.commit()
         await session.refresh(key_record)
 
         print(
-            f"Charged {COST_PER_REQUEST}. New balance for key hash {hashed_key[:10]}...: {key_record.balance}"
+            f"Charged {COST_PER_REQUEST} msats. New balance for key hash {hashed_key[:10]}...: {key_record.balance} msats"
         )
+
+
+async def adjust_payment_for_tokens(api_key: str, response_data: dict) -> dict:
+    """
+    Adjusts the payment based on token usage in the response.
+    This is called after the initial payment and the upstream request is complete.
+    Returns cost data to be included in the response.
+    """
+    cost_data = {
+        "base_cost_msats": COST_PER_REQUEST,
+        "prompt_cost_msats": 0,
+        "completion_cost_msats": 0,
+        "total_cost_msats": COST_PER_REQUEST,
+    }
+
+    if not (COST_PER_1K_PROMPT_TOKENS or COST_PER_1K_COMPLETION_TOKENS):
+        return cost_data  # Skip if token-based pricing is not enabled
+
+    # Extract token usage from response
+    usage = response_data.get("usage", {})
+    if not usage:
+        return cost_data  # No token usage information available
+
+    prompt_tokens = usage.get("prompt_tokens", 0)
+    completion_tokens = usage.get("completion_tokens", 0)
+
+    # Calculate token-based cost
+    prompt_cost = (prompt_tokens / 1000) * COST_PER_1K_PROMPT_TOKENS
+    completion_cost = (completion_tokens / 1000) * COST_PER_1K_COMPLETION_TOKENS
+    token_based_cost = int(prompt_cost + completion_cost)
+
+    cost_data["base_cost_msats"] = 0
+    cost_data["prompt_cost_msats"] = int(prompt_cost)
+    cost_data["completion_cost_msats"] = int(completion_cost)
+    cost_data["total_cost_msats"] = token_based_cost
+
+    # If token-based pricing is enabled and base cost is 0, use token-based cost
+    # Otherwise, token cost is additional to the base cost
+    cost_difference = token_based_cost - COST_PER_REQUEST
+
+    if cost_difference == 0:
+        return cost_data  # No adjustment needed
+
+    hashed_key = _hash_api_key(api_key)
+
+    async with create_session() as session:
+        key_record = await session.get(ApiKey, hashed_key)
+
+        if key_record is None:
+            print(
+                f"Warning: API key not found when adjusting payment: {hashed_key[:10]}..."
+            )
+            return cost_data
+
+        if cost_difference > 0:
+            # Need to charge more
+            if key_record.balance < cost_difference:
+                print(
+                    f"Warning: Insufficient balance for token-based pricing adjustment: {hashed_key[:10]}..."
+                )
+                # Still proceed but log the issue - we already provided the service
+            else:
+                key_record.balance -= cost_difference
+                key_record.total_spent += cost_difference
+                print(
+                    f"Additional charge for tokens: {cost_difference} msats. New balance: {key_record.balance} msats"
+                )
+                cost_data["total_cost_msats"] = COST_PER_REQUEST + cost_difference
+        else:
+            # Refund some of the base cost
+            refund = abs(cost_difference)
+            key_record.balance += refund
+            key_record.total_spent -= refund
+            print(
+                f"Refund for tokens: {refund} msats. New balance: {key_record.balance} msats"
+            )
+            cost_data["total_cost_msats"] = COST_PER_REQUEST - refund
+
+        session.add(key_record)
+        await session.commit()
+
+    return cost_data
+
+
+def convert_usd_to_btc(usd: float) -> float:
+    EXCHANGE_FEE = 0.005
+    BTC_PRICE = 93000
+    return usd / BTC_PRICE * (1 - EXCHANGE_FEE)
+
+
+class LLModel(BaseModel):
+    name: str
+    max_prompt_tokens: int
+    max_completion_tokens: int
+    cost_per_1m_prompt_tokens: float
+    cost_per_1m_completion_tokens: float
+    currency: Literal["btc", "usd"]
+
+    @property
+    def msats_per_1k_prompt_tokens(self) -> float:
+        if self.currency == "btc":
+            return self.cost_per_1m_prompt_tokens * 100_000_000
+        return convert_usd_to_btc(self.cost_per_1m_prompt_tokens) * 100_000_000
+
+    @property
+    def msats_per_1k_completion_tokens(self) -> float:
+        if self.currency == "btc":
+            return self.cost_per_1m_completion_tokens * 100_000_000
+        return convert_usd_to_btc(self.cost_per_1m_completion_tokens) * 100_000_000
+
+
+class Offering(BaseModel):
+    npub: str
+    models: list[LLModel]
