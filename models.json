@@ -31,12 +31,6 @@
             "currency": "usd"
         },
         {
-            "name": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free",
-            "cost_per_1m_prompt_tokens": 0.0,
-            "cost_per_1m_completion_tokens": 0.0,
-            "currency": "usd"
-        },
-        {
             "name": "Gryphe/MythoMax-L2-13b",
             "cost_per_1m_prompt_tokens": 0.3,
             "cost_per_1m_completion_tokens": 0.3,
@@ -61,21 +55,9 @@
             "currency": "usd"
         },
         {
-            "name": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-            "cost_per_1m_prompt_tokens": 0.0,
-            "cost_per_1m_completion_tokens": 0.0,
-            "currency": "usd"
-        },
-        {
             "name": "upstage/SOLAR-10.7B-Instruct-v1.0",
             "cost_per_1m_prompt_tokens": 0.3,
             "cost_per_1m_completion_tokens": 0.3,
-            "currency": "usd"
-        },
-        {
-            "name": "togethercomputer/MoA-1",
-            "cost_per_1m_prompt_tokens": 0.0,
-            "cost_per_1m_completion_tokens": 0.0,
             "currency": "usd"
         },
         {
@@ -148,12 +130,6 @@
             "name": "arcee-ai/coder-large",
             "cost_per_1m_prompt_tokens": 0.5,
             "cost_per_1m_completion_tokens": 0.8,
-            "currency": "usd"
-        },
-        {
-            "name": "togethercomputer/MoA-1-Turbo",
-            "cost_per_1m_prompt_tokens": 0.0,
-            "cost_per_1m_completion_tokens": 0.0,
             "currency": "usd"
         },
         {
@@ -277,15 +253,15 @@
             "currency": "usd"
         },
         {
-            "name": "nvidia/Llama-3.1-Nemotron-70B-Instruct-HF",
+            "name": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
             "cost_per_1m_prompt_tokens": 0.88,
             "cost_per_1m_completion_tokens": 0.88,
             "currency": "usd"
         },
         {
-            "name": "meta-llama/Llama-Vision-Free",
-            "cost_per_1m_prompt_tokens": 0.0,
-            "cost_per_1m_completion_tokens": 0.0,
+            "name": "nvidia/Llama-3.1-Nemotron-70B-Instruct-HF",
+            "cost_per_1m_prompt_tokens": 0.88,
+            "cost_per_1m_completion_tokens": 0.88,
             "currency": "usd"
         },
         {
@@ -328,12 +304,6 @@
             "name": "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
             "cost_per_1m_prompt_tokens": 0.18,
             "cost_per_1m_completion_tokens": 0.18,
-            "currency": "usd"
-        },
-        {
-            "name": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-            "cost_per_1m_prompt_tokens": 0.88,
-            "cost_per_1m_completion_tokens": 0.88,
             "currency": "usd"
         }
     ]
