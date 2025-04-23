@@ -1,4 +1,6 @@
 import hashlib
+import json
+import os
 from typing import Literal
 
 from fastapi import HTTPException
@@ -12,6 +14,7 @@ from .db import (
     COST_PER_REQUEST,
     COST_PER_1K_PROMPT_TOKENS,
     COST_PER_1K_COMPLETION_TOKENS,
+    MODEL_BASED_PRICING,
 )
 
 
@@ -108,7 +111,26 @@ async def adjust_payment_for_tokens(api_key: str, response_data: dict) -> dict:
         "completion_cost_msats": 0,
         "total_cost_msats": COST_PER_REQUEST,
     }
-
+    if MODEL_BASED_PRICING and os.path.exists("models.json"):
+        offering = Offering.validate(json.load(open("models.json")))
+        models = offering.models
+        response_model = response_data.get("model", "")
+        if response_model not in [model.name for model in models]:
+            raise HTTPException(status_code=400, detail="Invalid model")
+        model = next(model for model in models if model.name == response_model)
+        prompt_tokens = response_data.get("usage", {}).get("prompt_tokens", 0)
+        completion_tokens = response_data.get("usage", {}).get("completion_tokens", 0)
+        cost_data["base_cost_msats"] = 0
+        cost_data["prompt_cost_msats"] = int(
+            prompt_tokens / 1000 * model.msats_per_1k_prompt_tokens + 0.999
+        )
+        cost_data["completion_cost_msats"] = int(
+            completion_tokens / 1000 * model.msats_per_1k_completion_tokens + 0.999
+        )
+        cost_data["total_cost_msats"] = int(
+            cost_data["prompt_cost_msats"] + cost_data["completion_cost_msats"]
+        )
+        print(cost_data)
     if not (COST_PER_1K_PROMPT_TOKENS or COST_PER_1K_COMPLETION_TOKENS):
         return cost_data  # Skip if token-based pricing is not enabled
 
@@ -186,8 +208,6 @@ def convert_usd_to_btc(usd: float) -> float:
 
 class LLModel(BaseModel):
     name: str
-    max_prompt_tokens: int
-    max_completion_tokens: int
     cost_per_1m_prompt_tokens: float
     cost_per_1m_completion_tokens: float
     currency: Literal["btc", "usd"]
@@ -206,5 +226,5 @@ class LLModel(BaseModel):
 
 
 class Offering(BaseModel):
-    npub: str
+    # npub: str
     models: list[LLModel]
