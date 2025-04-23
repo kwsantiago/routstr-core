@@ -1,7 +1,7 @@
 [project]
 name = "routstr-proxy"
 version = "0.1.0"
-description = "Add your description here"
+description = "Payment proxy for your LLM endpoint using cashu and nostr."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
