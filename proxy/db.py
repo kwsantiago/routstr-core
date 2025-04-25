@@ -8,17 +8,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///keys.db")
 
-# These are needed here because validate_api_key and pay_for_request use them in auth.py
-# Consider passing these as arguments or managing config differently if needed
-RECIEIVE_LN_ADDRESS = os.environ["RECIEIVE_LN_ADDRESS"]
-COST_PER_REQUEST = int(os.environ["COST_PER_REQUEST"]) * 1000  # Convert to msats
-COST_PER_1K_PROMPT_TOKENS = (
-    int(os.environ.get("COST_PER_1K_PROMPT_TOKENS", "0")) * 1000
-)  # Convert to msats
-COST_PER_1K_COMPLETION_TOKENS = (
-    int(os.environ.get("COST_PER_1K_COMPLETION_TOKENS", "0")) * 1000
-)  # Convert to msats
-MODEL_BASED_PRICING = os.environ.get("MODEL_BASED_PRICING", "false").lower() == "true"
 
 engine = create_async_engine(DATABASE_URL, echo=False)  # echo=True for debugging SQL
 
@@ -28,6 +17,10 @@ class ApiKey(SQLModel, table=True):  # type: ignore
 
     hashed_key: str = Field(primary_key=True)
     balance: int = Field(default=0, description="Balance in millisatoshis (msats)")
+    refund_address: str | None = Field(
+        default=None,
+        description="Lightning address to refund remaining balance after key expires",
+    )
     total_spent: int = Field(
         default=0, description="Total spent in millisatoshis (msats)"
     )
