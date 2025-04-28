@@ -6,8 +6,8 @@ from typing import Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from .redeem import redeem
-from .db import ApiKey, create_session
+from .redeem import credit_balance
+from .db import ApiKey, AsyncSession
 from .price import btc_usd_ask_price
 
 RECIEIVE_LN_ADDRESS = os.environ["RECIEIVE_LN_ADDRESS"]
@@ -21,74 +21,53 @@ COST_PER_1K_OUTPUT_TOKENS = (
 MODEL_BASED_PRICING = os.environ.get("MODEL_BASED_PRICING", "false").lower() == "true"
 
 
-def _hash_api_key(api_key: str) -> str:
-    """Hashes the API key using SHA256."""
-    return hashlib.sha256(api_key.encode()).hexdigest()
-
-
-async def validate_api_key(api_key: str) -> ApiKey:
+async def validate_bearer_key(bearer_key: str, session: AsyncSession) -> ApiKey:
     """
     Validates the provided API key using SQLModel.
     If it's a cashu key, it redeems it and stores its hash and balance.
     Otherwise checks if the hash of the key exists.
     """
-    if not api_key:
+    if not bearer_key:
         raise HTTPException(status_code=401, detail="api-key or cashu-token required")
 
-    hashed_key = _hash_api_key(api_key)
+    if bearer_key.startswith("sk-"):
+        if exsisting_key := await session.get(ApiKey, bearer_key[3:]):
+            return exsisting_key
 
-    async with create_session() as session:
-        if key := await session.get(ApiKey, hashed_key):
-            return key
-
-        if api_key.startswith("cashu"):
-            try:
-                # Redeem the original cashu key
-                amount = await redeem(api_key, RECIEIVE_LN_ADDRESS)
-                amount_msats = amount * 1000  # Convert sats to msats
-                # Store the hash and the redeemed amount using SQLModel
-                new_key = ApiKey(hashed_key=hashed_key, balance=amount_msats)
-                session.add(new_key)
-                await session.commit()
-                await session.refresh(new_key)
-                return new_key
-            except Exception as e:
-                print(f"Redemption failed: {e}")
-                raise HTTPException(
-                    status_code=401, detail=f"Invalid or expired cashu key: {e}"
-                )
-        if api_key.startswith("sk-"):
-            if exsisting_key := await session.get(ApiKey, api_key[3:]):
+    if bearer_key.startswith("cashu"):
+        try:
+            hashed_key = hashlib.sha256(bearer_key.encode()).hexdigest()
+            if exsisting_key := await session.get(ApiKey, hashed_key):
                 return exsisting_key
-
-        raise HTTPException(status_code=401, detail="Invalid API key")
-
-
-async def pay_for_request(api_key: str) -> None:
-    """Deducts the cost of a request from the balance associated with the API key hash using SQLModel."""
-    hashed_key = _hash_api_key(api_key)
-
-    async with create_session() as session:
-        key_record = await session.get(ApiKey, hashed_key)
-
-        if not key_record:  # This should not happen
-            raise HTTPException(status_code=401, detail="API key not validated")
-
-        if key_record.balance < COST_PER_REQUEST:
+            new_key = ApiKey(hashed_key=hashed_key, balance=0)
+            await credit_balance(bearer_key, new_key, session)
+            await session.refresh(new_key)
+            return new_key
+        except Exception as e:
+            print(f"Redemption failed: {e}")
             raise HTTPException(
-                status_code=402, detail="Insufficient balance"
-            )  # 402 Payment Required
-
-        # Charge the base cost for the request
-        key_record.balance -= COST_PER_REQUEST
-        key_record.total_spent += COST_PER_REQUEST
-        key_record.total_requests += 1
-        session.add(key_record)
-        await session.commit()
-        await session.refresh(key_record)
+                status_code=401, detail=f"Invalid or expired cashu key: {e}"
+            )
+    print(bearer_key)
+    raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-async def adjust_payment_for_tokens(api_key: str, response_data: dict) -> dict:
+async def pay_for_request(key: ApiKey, session: AsyncSession) -> None:
+    if key.balance < COST_PER_REQUEST:
+        raise HTTPException(status_code=402, detail="Insufficient balance")
+
+    # Charge the base cost for the request
+    key.balance -= COST_PER_REQUEST
+    key.total_spent += COST_PER_REQUEST
+    key.total_requests += 1
+    session.add(key)
+    await session.commit()
+    await session.refresh(key)
+
+
+async def adjust_payment_for_tokens(
+    key: ApiKey, response_data: dict, session: AsyncSession
+) -> dict:
     """
     Adjusts the payment based on token usage in the response.
     This is called after the initial payment and the upstream request is complete.
@@ -131,39 +110,26 @@ async def adjust_payment_for_tokens(api_key: str, response_data: dict) -> dict:
     if cost_difference == 0:
         return cost_data  # No adjustment needed
 
-    hashed_key = _hash_api_key(api_key)
-
-    async with create_session() as session:
-        key_record = await session.get(ApiKey, hashed_key)
-
-        if key_record is None:
+    if cost_difference > 0:
+        # Need to charge more
+        if key.balance < cost_difference:
             print(
-                f"Warning: API key not found when adjusting payment: {hashed_key[:10]}..."
+                f"Warning: Insufficient balance for token-based pricing adjustment: {key.hashed_key[:10]}..."
             )
-            return cost_data
-
-        if cost_difference > 0:
-            # Need to charge more
-            if key_record.balance < cost_difference:
-                print(
-                    f"Warning: Insufficient balance for token-based pricing adjustment: {hashed_key[:10]}..."
-                )
-                # Still proceed but log the issue - we already provided the service
-            else:
-                key_record.balance -= cost_difference
-                key_record.total_spent += cost_difference
-                cost_data["total_msats"] = COST_PER_REQUEST + cost_difference
+            # Still proceed but log the issue - we already provided the service
         else:
-            # Refund some of the base cost
-            refund = abs(cost_difference)
-            key_record.balance += refund
-            key_record.total_spent -= refund
-            cost_data["total_msats"] = COST_PER_REQUEST - refund
+            key.balance -= cost_difference
+            key.total_spent += cost_difference
+            cost_data["total_msats"] = COST_PER_REQUEST + cost_difference
+    else:
+        # Refund some of the base cost
+        refund = abs(cost_difference)
+        key.balance += refund
+        key.total_spent -= refund
+        cost_data["total_msats"] = COST_PER_REQUEST - refund
 
-        session.add(key_record)
-        await session.commit()
-
-    print("cost_data:", cost_data)
+    session.add(key)
+    await session.commit()
 
     return cost_data
 

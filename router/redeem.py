@@ -1,21 +1,32 @@
 import httpx
-import os
 
 from cashu.core.base import Token  # type: ignore
 from cashu.wallet.wallet import Wallet  # type: ignore
-from cashu.core.settings import settings  # type: ignore
 from cashu.wallet.helpers import deserialize_token_from_string, receive  # type: ignore
 
+from .db import ApiKey, AsyncSession
 
-async def _initialize_wallet(mint_url: str) -> Wallet:
+WALLET = None
+
+
+async def _initialize_wallet(mint_url: str | None = None) -> Wallet:
     """Initializes and loads a Cashu wallet."""
+    global WALLET
+    if WALLET is not None:
+        return WALLET
+    if mint_url is None:
+        mint_url = "https://mint.minibits.cash/Bitcoin"
     wallet = await Wallet.with_db(
         mint_url,
-        db=os.path.join(settings.cashu_dir, "temp"),
+        db=".",
         load_all_keysets=True,
+        unit="sat",  # todo change to msat
     )
     await wallet.load_mint_info()
+    if not hasattr(wallet, "keyset_id") or wallet.keyset_id is None:
+        await wallet.activate_keyset()
     await wallet.load_proofs(reload=True)
+    WALLET = wallet
     return wallet
 
 
@@ -29,16 +40,15 @@ async def _handle_token_receive(wallet: Wallet, token_obj: Token) -> int:
 
     if amount_received <= 0:
         raise ValueError("Token contained no value.")
-    return amount_received
+    return amount_received * 1000
 
 
-async def _get_lnurl_invoice(callback_url: str, amount_sat: int) -> tuple[str, dict]:
+async def _get_lnurl_invoice(callback_url: str, amount_msat: int) -> tuple[str, dict]:
     """Requests an invoice from the LNURL callback URL."""
-    amount_msats = amount_sat * 1000
     async with httpx.AsyncClient() as client:
         response = await client.get(
             callback_url,
-            params={"amount": amount_msats},
+            params={"amount": amount_msat},
             follow_redirects=True,
         )
         response.raise_for_status()  # Raise exception for non-2xx status codes
@@ -49,11 +59,11 @@ async def _get_lnurl_invoice(callback_url: str, amount_sat: int) -> tuple[str, d
 
 
 async def _pay_invoice_with_cashu(
-    wallet: Wallet, bolt11_invoice: str, amount_to_send_sat: int
+    wallet: Wallet, bolt11_invoice: str, amount_to_send_msat: int
 ) -> int:
     """Pays a BOLT11 invoice using Cashu proofs via melt."""
 
-    quote = await wallet.melt_quote(bolt11_invoice, amount_to_send_sat)
+    quote = await wallet.melt_quote(bolt11_invoice, amount_to_send_msat)
 
     proofs_to_melt, _ = await wallet.select_to_send(
         wallet.proofs, quote.amount + quote.fee_reserve
@@ -66,6 +76,49 @@ async def _pay_invoice_with_cashu(
     return quote.amount
 
 
+async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
+    token_obj: Token = deserialize_token_from_string(cashu_token)
+    wallet: Wallet = await _initialize_wallet(token_obj.mint)
+    amount_msats = await _handle_token_receive(wallet, token_obj)
+    key.balance += amount_msats
+    session.add(key)
+    await session.commit()
+    return amount_msats
+
+
+async def refund_balance(amount: int, key: ApiKey, session: AsyncSession) -> int:
+    wallet = await _initialize_wallet()
+    if key.balance < amount:
+        raise ValueError("Insufficient balance.")
+    if amount <= 0:
+        amount = key.balance
+    key.balance -= amount
+    session.add(key)
+    await session.commit()
+    if key.refund_address is None:
+        raise ValueError("Refund address not set.")
+    return await send_to_lnurl(wallet, key.refund_address, amount)
+
+
+async def create_token(
+    amount_msats: int, mint: str = "https://mint.minibits.cash/Bitcoin"
+) -> str:
+    wallet = await _initialize_wallet(mint)
+    balance = wallet.available_balance
+    amount_sats = amount_msats // 1000
+    if balance < amount_sats:
+        raise ValueError("Insufficient balance on mint.")
+    print(balance, amount_sats)
+    if balance > amount_sats:
+        print("splitting")
+        _, send_proofs = await wallet.split(wallet.proofs, amount_sats)
+    else:
+        print("no splitting")
+        send_proofs = wallet.proofs
+    token = await wallet._make_tokenv4(send_proofs)
+    return token.serialize()
+
+
 async def redeem(cashu_token: str, lnurl: str) -> int:
     """
     Redeems a Cashu token and sends the amount to an LNURL address.
@@ -75,7 +128,7 @@ async def redeem(cashu_token: str, lnurl: str) -> int:
         lnurl: The LNURL string (can be bech32, user@host, or direct URL).
 
     Returns:
-        The amount in satoshis that was successfully sent.
+        The amount in millisatoshis that was successfully sent.
 
     Raises:
         Exception: If any step of the process fails (token receive, LNURL fetch, invoice payment).
@@ -88,17 +141,36 @@ async def redeem(cashu_token: str, lnurl: str) -> int:
     # if USE_BALANCE_ON_INVALID_TOKEN:
     #     amount_received = wallet.available_balance
 
+    return await send_to_lnurl(wallet, lnurl, amount_received)
+
+
+async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
+    """
+    Sends funds from a Cashu wallet to an LNURL address.
+
+    Args:
+        wallet: The initialized Cashu wallet with available balance.
+        lnurl: The LNURL string (can be bech32, user@host, or direct URL).
+        amount_msat: The amount in millisatoshis to send.
+
+    Returns:
+        The amount in millisatoshis that was successfully sent.
+
+    Raises:
+        ValueError: If amount is outside LNURL limits or other validation errors.
+        Exception: If LNURL fetch or invoice payment fails.
+    """
     callback_url, min_sendable, max_sendable = await get_lnurl_data(lnurl)
 
-    if not (min_sendable <= amount_received * 1000 <= max_sendable):
+    if not (min_sendable <= amount_msat <= max_sendable):
         raise ValueError(
-            f"Amount {amount_received} sat is outside LNURL limits "
+            f"Amount {amount_msat / 1000} sat is outside LNURL limits "
             f"({min_sendable / 1000} - {max_sendable / 1000} sat)."
         )
     # subtract estimated fees
-    amount_to_send = amount_received - int(max(2, amount_received * 0.01))
+    amount_to_send = amount_msat - int(max(2000, amount_msat * 0.01))
 
-    # Note: We pass amount_received directly. The actual amount paid might be adjusted
+    # Note: We pass amount_msat directly. The actual amount paid might be adjusted
     # slightly by the melt quote based on the invoice details.
     bolt11_invoice, _ = await _get_lnurl_invoice(callback_url, amount_to_send)
 
@@ -176,7 +248,7 @@ if __name__ == "__main__":
         # Removed try-except block, script will crash on error
         print(f"Attempting to redeem token and pay LNURL: {lnurl}")
         amount_sent = await redeem(cashu_token, lnurl)
-        print(f"✅ Successfully sent {amount_sent} sat.")
+        print(f"✅ Successfully sent {amount_sent / 1000} sat ({amount_sent} msat).")
 
     # Removed try-except block for KeyboardInterrupt
     asyncio.run(main())

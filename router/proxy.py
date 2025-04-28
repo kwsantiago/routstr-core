@@ -1,11 +1,12 @@
 import os
 import json
-from fastapi import APIRouter, Request, BackgroundTasks
+from fastapi import APIRouter, Request, BackgroundTasks, Depends
 from fastapi.responses import Response, StreamingResponse
 import httpx
 import re
 
-from .auth import validate_api_key, pay_for_request, adjust_payment_for_tokens
+from .auth import validate_bearer_key, pay_for_request, adjust_payment_for_tokens
+from .db import AsyncSession, get_session
 
 UPSTREAM_BASE_URL = os.environ["UPSTREAM_BASE_URL"]
 UPSTREAM_API_KEY = os.environ.get("UPSTREAM_API_KEY", "")
@@ -16,12 +17,14 @@ proxy_router = APIRouter()
 @proxy_router.api_route(
     "/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"]
 )
-async def proxy(request: Request, path: str):
+async def proxy(
+    request: Request, path: str, session: AsyncSession = Depends(get_session)
+):
     auth = request.headers.get("Authorization", "")
-    api_key = auth.replace("Bearer ", "") if auth.startswith("Bearer ") else ""
+    bearer_key = auth.replace("Bearer ", "") if auth.startswith("Bearer ") else ""
 
-    await validate_api_key(api_key)
-    await pay_for_request(api_key)
+    key = await validate_bearer_key(bearer_key, session)
+    await pay_for_request(key, session)
 
     # Prepare headers, removing sensitive/problematic ones
     headers = dict(request.headers)
@@ -100,7 +103,7 @@ async def proxy(request: Request, path: str):
                                     ):
                                         # Found usage data, calculate cost
                                         cost_data = await adjust_payment_for_tokens(
-                                            api_key, data
+                                            key, data, session
                                         )
                                         # Format as SSE and yield
                                         cost_json = json.dumps({"cost": cost_data})
@@ -136,7 +139,9 @@ async def proxy(request: Request, path: str):
                 try:
                     content = await response.aread()
                     response_json = json.loads(content)
-                    cost_data = await adjust_payment_for_tokens(api_key, response_json)
+                    cost_data = await adjust_payment_for_tokens(
+                        key, response_json, session
+                    )
                     response_json["cost"] = cost_data
                     return Response(
                         content=json.dumps(response_json).encode(),
