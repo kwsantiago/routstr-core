@@ -1,19 +1,19 @@
 from typing import Annotated
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Depends
 
-from .auth import validate_api_key
+from .auth import validate_bearer_key
+from .redeem import refund_balance, credit_balance, create_token
+from .db import ApiKey, AsyncSession, get_session
 
-account_router = APIRouter(prefix="/account")
+account_router = APIRouter(prefix="/v1/wallet")
 
 
-@account_router.get("/")
-async def account_info(authorization: Annotated[str, Header(...)]) -> dict:
+async def get_key_from_header(
+    authorization: Annotated[str, Header(...)],
+    session: AsyncSession = Depends(get_session),
+) -> ApiKey:
     if authorization.startswith("Bearer "):
-        if key := await validate_api_key(authorization[7:]):
-            return {
-                "balance": key.balance,
-                "api_key": "sk-" + key.hashed_key,
-            }
+        return await validate_bearer_key(authorization[7:], session)
 
     raise HTTPException(
         status_code=401,
@@ -21,11 +21,35 @@ async def account_info(authorization: Annotated[str, Header(...)]) -> dict:
     )
 
 
+@account_router.get("/")
+async def account_info(key: ApiKey = Depends(get_key_from_header)) -> dict:
+    return {
+        "api_key": "sk-" + key.hashed_key,
+        "balance": key.balance,
+    }
+
+
 @account_router.post("/topup")
-async def topup_balance(cashu_token: str):
-    return {"todo": "implement"}
+async def topup_balance_endpoint(
+    cashu_token: str,
+    key: ApiKey = Depends(get_key_from_header),
+    session: AsyncSession = Depends(get_session),
+):
+    return await credit_balance(cashu_token, key, session)
 
 
 @account_router.post("/refund")
-async def refund_balance(lightning_address: str):
-    return {"todo": "implement"}
+async def refund_balance_endpoint(
+    key: ApiKey = Depends(get_key_from_header),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    remaining_balance = key.balance
+    key.balance = 0
+    session.add(key)
+    await session.commit()
+    if key.refund_address:
+        await refund_balance(remaining_balance, key, session)
+        return {"recipient": key.refund_address, "msats": remaining_balance}
+    else:
+        token = await create_token(remaining_balance)
+        return {"msats": remaining_balance, "recipient": None, "token": token}
