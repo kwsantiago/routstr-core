@@ -6,6 +6,7 @@ from .db import init_db
 from .proxy import proxy_router
 from .account import account_router
 from .auth import read_models
+from .redeem import _initialize_wallet
 
 __version__ = "0.0.1"
 
@@ -47,3 +48,4 @@ app.include_router(proxy_router)
 @app.on_event("startup")
 async def startup_event():
     await init_db()
+    await _initialize_wallet()
