@@ -1,5 +1,5 @@
 [project]
-name = "routstr-proxy"
+name = "routstr"
 version = "0.0.1"
 description = "Payment proxy for your LLM endpoint using cashu and nostr."
 readme = "README.md"
