@@ -19,9 +19,7 @@ def chat():
         ai_msg = {"role": "assistant", "content": ""}
 
         for chunk in client.chat.completions.create(
-            model=os.environ.get(
-                "MODEL", "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
-            ),
+            model=os.environ.get("MODEL", "openai/gpt-4o-mini"),
             messages=history,
             stream=True,
         ):
