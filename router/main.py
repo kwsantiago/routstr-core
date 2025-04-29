@@ -6,7 +6,7 @@ from .db import init_db
 from .proxy import proxy_router
 from .account import account_router
 from .auth import read_models
-from .redeem import _initialize_wallet
+from .cashu import _initialize_wallet
 
 __version__ = "0.0.1"
 

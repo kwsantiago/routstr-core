@@ -1,11 +1,15 @@
+import os
 import httpx
 
 from cashu.core.base import Token  # type: ignore
 from cashu.wallet.wallet import Wallet  # type: ignore
 from cashu.wallet.helpers import deserialize_token_from_string, receive  # type: ignore
-
+from sqlmodel import select, func, col
 from .db import ApiKey, AsyncSession
 
+RECIEVE_LN_ADDRESS = os.environ["RECIEVE_LN_ADDRESS"]
+MINIMUM_PAYOUT = 100  # sat
+DEVS_DONATION_RATE = 0.021  # 2.1%
 WALLET = None
 
 
@@ -23,6 +27,7 @@ async def _initialize_wallet(mint_url: str | None = None) -> Wallet:
         unit="sat",  # todo change to msat
     )
     await wallet.load_mint_info()
+    await wallet.load_mint_keysets()
     if not hasattr(wallet, "keyset_id") or wallet.keyset_id is None:
         await wallet.activate_keyset()
     await wallet.load_proofs(reload=True)
@@ -74,6 +79,37 @@ async def _pay_invoice_with_cashu(
     )
 
     return quote.amount
+
+
+async def pay_out(session: AsyncSession) -> None:
+    """
+    Calculates the pay-out amount based on the spent balance, profit, and donation rate.
+    """
+    balance = (
+        await session.exec(
+            select(func.sum(col(ApiKey.balance))).where(ApiKey.balance > 0)
+        )
+    ).one()
+    if balance is None:
+        raise ValueError("No balance to pay out.")
+    user_balance = balance // 1000
+    wallet = await _initialize_wallet()
+    wallet_balance = wallet.available_balance
+
+    assert wallet_balance >= user_balance, "Something went deeply wrong."
+
+    if (revenue := wallet_balance - user_balance) <= MINIMUM_PAYOUT:
+        return
+
+    devs_donation = int(revenue * DEVS_DONATION_RATE)
+    owners_draw = revenue - devs_donation
+
+    await send_to_lnurl(wallet, RECIEVE_LN_ADDRESS, owners_draw)
+    await send_to_lnurl(
+        wallet,
+        "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s@npub.cash",
+        devs_donation,
+    )
 
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:

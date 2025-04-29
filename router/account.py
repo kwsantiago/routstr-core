@@ -2,7 +2,7 @@ from typing import Annotated
 from fastapi import APIRouter, Header, HTTPException, Depends
 
 from .auth import validate_bearer_key
-from .redeem import refund_balance, credit_balance, create_token
+from .cashu import refund_balance, credit_balance, create_token
 from .db import ApiKey, AsyncSession, get_session
 
 account_router = APIRouter(prefix="/v1/wallet")

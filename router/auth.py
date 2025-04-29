@@ -6,11 +6,10 @@ from typing import Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from .redeem import credit_balance
+from .cashu import credit_balance, pay_out
 from .db import ApiKey, AsyncSession
 from .price import btc_usd_ask_price
 
-RECIEIVE_LN_ADDRESS = os.environ["RECIEIVE_LN_ADDRESS"]
 COST_PER_REQUEST = (
     int(os.environ.get("COST_PER_REQUEST", "1")) * 1000
 )  # Convert to msats
@@ -50,7 +49,6 @@ async def validate_bearer_key(bearer_key: str, session: AsyncSession) -> ApiKey:
             raise HTTPException(
                 status_code=401, detail=f"Invalid or expired cashu key: {e}"
             )
-    print(bearer_key)
     raise HTTPException(status_code=401, detail="Invalid API key")
 
 
@@ -132,6 +130,8 @@ async def adjust_payment_for_tokens(
 
     session.add(key)
     await session.commit()
+
+    await pay_out(session)
 
     return cost_data
 
