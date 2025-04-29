@@ -1,3 +1,4 @@
+import asyncio
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -5,8 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .db import init_db
 from .proxy import proxy_router
 from .account import account_router
-from .auth import read_models
 from .cashu import _initialize_wallet
+from .models import MODELS, update_sats_pricing
 
 __version__ = "0.0.1"
 
@@ -37,7 +38,7 @@ async def info():
         "mint": os.environ.get("MINT", ""),
         "http_url": os.environ.get("HTTP_URL", ""),
         "onion_url": os.environ.get("ONION_URL", ""),
-        "models": read_models(),
+        "models": MODELS,
     }
 
 
@@ -49,3 +50,4 @@ app.include_router(proxy_router)
 async def startup_event():
     await init_db()
     await _initialize_wallet()
+    asyncio.create_task(update_sats_pricing())

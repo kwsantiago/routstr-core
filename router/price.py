@@ -3,27 +3,27 @@ import httpx
 import asyncio
 
 # artifical spread to cover conversion fees
-EXCHANGE_FEE = os.environ.get("EXCHANGE_FEE", 1.005)  # 0.5% default
+EXCHANGE_FEE = float(os.environ.get("EXCHANGE_FEE", "1.005"))  # 0.5% default
 
 
-async def kraken_btc_usd(client: httpx.AsyncClient) -> int:
+async def kraken_btc_usd(client: httpx.AsyncClient) -> float:
     api = "https://api.kraken.com/0/public/Ticker?pair=XBTUSD"
-    return int(float((await client.get(api)).json()["result"]["XXBTZUSD"]["c"][0]))
+    return float((await client.get(api)).json()["result"]["XXBTZUSD"]["c"][0])
 
 
-async def coinbase_btc_usd(client: httpx.AsyncClient) -> int:
+async def coinbase_btc_usd(client: httpx.AsyncClient) -> float:
     api = "https://api.coinbase.com/v2/prices/BTC-USD/spot"
-    return int(float((await client.get(api)).json()["data"]["amount"]))
+    return float((await client.get(api)).json()["data"]["amount"])
 
 
-async def binance_btc_usdt(client: httpx.AsyncClient) -> int:
+async def binance_btc_usdt(client: httpx.AsyncClient) -> float:
     api = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-    return int(float((await client.get(api)).json()["price"]))
+    return float((await client.get(api)).json()["price"])
 
 
-async def btc_usd_ask_price() -> int:
+async def btc_usd_ask_price() -> float:
     async with httpx.AsyncClient() as client:
-        return int(
+        return (
             max(
                 await asyncio.gather(
                     kraken_btc_usd(client),
@@ -33,3 +33,7 @@ async def btc_usd_ask_price() -> int:
             )
             * EXCHANGE_FEE
         )
+
+
+async def sats_usd_ask_price() -> float:
+    return (await btc_usd_ask_price()) / 100_000_000

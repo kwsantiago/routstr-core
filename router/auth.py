@@ -1,14 +1,11 @@
 import hashlib
-import json
 import os
-from typing import Literal
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field
 
 from .cashu import credit_balance, pay_out
 from .db import ApiKey, AsyncSession
-from .price import btc_usd_ask_price
+from .models import MODELS
 
 COST_PER_REQUEST = (
     int(os.environ.get("COST_PER_REQUEST", "1")) * 1000
@@ -79,14 +76,17 @@ async def adjust_payment_for_tokens(
         "output_msats": 0,
         "total_msats": COST_PER_REQUEST,
     }
+
     if MODEL_BASED_PRICING and os.path.exists("models.json"):
-        models = read_models()
         response_model = response_data.get("model", "")
-        if response_model not in [model.name for model in models]:
+        if response_model not in [model.id for model in MODELS]:
             raise HTTPException(status_code=400, detail="Invalid model")
-        model = next(model for model in models if model.name == response_model)
-        MSATS_PER_1K_INPUT_TOKENS = await model.msats_per_1k_input_tokens()
-        MSATS_PER_1K_OUTPUT_TOKENS = await model.msats_per_1k_output_tokens()
+        model = next(model for model in MODELS if model.id == response_model)
+        if model.sats_pricing is None:
+            raise HTTPException(status_code=400, detail="Model pricing not defined")
+
+        MSATS_PER_1K_INPUT_TOKENS = model.sats_pricing.prompt * 1_000_000
+        MSATS_PER_1K_OUTPUT_TOKENS = model.sats_pricing.completion * 1_000_000
 
     if not (MSATS_PER_1K_OUTPUT_TOKENS and MSATS_PER_1K_INPUT_TOKENS):
         raise HTTPException(status_code=400, detail="Model pricing not defined")
@@ -134,30 +134,3 @@ async def adjust_payment_for_tokens(
     await pay_out(session)
 
     return cost_data
-
-
-class LLModel(BaseModel):
-    name: str
-    cost_per_1m_input_tokens: float = Field(alias="cost_per_1m_prompt_tokens")
-    cost_per_1m_output_tokens: float = Field(alias="cost_per_1m_completion_tokens")
-    currency: Literal["btc", "usd"]
-
-    async def msats_per_1k_input_tokens(self) -> float:
-        if self.currency == "btc":
-            return self.cost_per_1m_input_tokens * 100_000
-        btc_price = await btc_usd_ask_price()
-        return (self.cost_per_1m_input_tokens / 1000) * (100_000_000_000 / btc_price)
-
-    async def msats_per_1k_output_tokens(self) -> float:
-        if self.currency == "btc":
-            return self.cost_per_1m_output_tokens * 100_000
-        btc_price = await btc_usd_ask_price()
-        return (self.cost_per_1m_output_tokens / 1000) * (100_000_000_000 / btc_price)
-
-
-def read_models() -> list[LLModel]:
-    if not os.path.exists("models.json"):
-        raise HTTPException(status_code=400, detail="Models not defined")
-    with open("models.json", "r") as f:
-        models = json.load(f)["models"]
-    return [LLModel(**model) for model in models]

@@ -96,7 +96,7 @@ async def pay_out(session: AsyncSession) -> None:
     wallet = await _initialize_wallet()
     wallet_balance = wallet.available_balance
 
-    assert wallet_balance >= user_balance, "Something went deeply wrong."
+    assert wallet_balance <= user_balance, "Something went deeply wrong."
 
     if (revenue := wallet_balance - user_balance) <= MINIMUM_PAYOUT:
         return
