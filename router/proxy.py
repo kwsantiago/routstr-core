@@ -1,9 +1,12 @@
+import asyncio
 import os
 import json
 from fastapi import APIRouter, Request, BackgroundTasks, Depends
 from fastapi.responses import Response, StreamingResponse
 import httpx
 import re
+
+from router.cashu import pay_out
 
 from .auth import validate_bearer_key, pay_for_request, adjust_payment_for_tokens
 from .db import AsyncSession, get_session
@@ -143,6 +146,7 @@ async def proxy(
                         key, response_json, session
                     )
                     response_json["cost"] = cost_data
+                    asyncio.create_task(pay_out(session))
                     return Response(
                         content=json.dumps(response_json).encode(),
                         status_code=response.status_code,
@@ -162,6 +166,7 @@ async def proxy(
         background_tasks.add_task(response.aclose)
         background_tasks.add_task(client.aclose)
 
+        asyncio.create_task(pay_out(session))
         return StreamingResponse(
             response.aiter_bytes(),
             status_code=response.status_code,
