@@ -42,9 +42,12 @@ with open("models.json", "r") as f:
 
 async def update_sats_pricing() -> None:
     while True:
-        sats_to_usd = await sats_usd_ask_price()
-        for model in MODELS:
-            model.sats_pricing = Pricing(
-                **{k: v / sats_to_usd for k, v in model.pricing.dict().items()}
-            )
+        try:
+            sats_to_usd = await sats_usd_ask_price()
+            for model in MODELS:
+                model.sats_pricing = Pricing(
+                    **{k: v / sats_to_usd for k, v in model.pricing.dict().items()}
+                )
+        except Exception as e:
+            print(e)
         await asyncio.sleep(10)
