@@ -26,4 +26,4 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 
-CMD ["/.venv/bin/fastapi", "run", "proxy"]
+CMD ["/.venv/bin/fastapi", "run", "router", "--host", "0.0.0.0"]
