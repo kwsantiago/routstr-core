@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import init_db
+from .admin import admin_router
 from .proxy import proxy_router
 from .account import account_router
 from .cashu import _initialize_wallet
@@ -42,6 +43,7 @@ async def info():
     }
 
 
+app.include_router(admin_router)
 app.include_router(account_router)
 app.include_router(proxy_router)
 
