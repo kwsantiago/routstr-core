@@ -3,23 +3,19 @@ version: '3.8'
 services:
   router:
     build: .
-    command: ["/.venv/bin/fastapi", "run", "router", "--host", "0.0.0.0"]
-    ports:
-      - 8001:8000
     volumes:
       - .:/app
     env_file:
       - .env
 
   tor:
-    image: goldy/tor-hidden-service:latest
+    image: ghcr.io/hundehausen/tor-hidden-service:latest
     volumes:
       - tor-data:/var/lib/tor
     environment:
-      - VIRTUAL_PORT=80
-      - TARGET_HOST=router
-      - TARGET_PORT=8000
-    networks:
+      # Format: HS_<NAME>=<TARGET_HOST>:<TARGET_PORT>:<VIRTUAL_PORT>
+      - HS_ROUTER=router:8000:80
+    depends_on:
       - router
 
 volumes:
