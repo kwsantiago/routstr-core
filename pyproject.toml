@@ -10,6 +10,7 @@ dependencies = [
     "fastapi[standard]>=0.115",
     "sqlmodel>=0.0.24",
     "marshmallow<4.0",
+    "httpx[socks]>=0.25.2",
 ]
 
 [dependency-groups]
