@@ -4,9 +4,9 @@ import openai
 client = openai.OpenAI(
     api_key=os.environ["CASHU_TOKEN"],
     base_url=os.environ.get("ROUTSTR_API_URL", "https://api.routstr.com/v1"),
+    # base_url="http://roustrjfsdgfiueghsklchg.onion/v1",
     # client=httpx.AsyncClient(
-    #     base_url=os.environ.get("ROUTSTR_API_URL", "https://roustrjfsdgfiueghsklchg.onion/v1"),
-    #     proxies=os.environ.get("ROUTSTR_PROXY", "socks5://localhost:9050"),
+    #     proxies={"http": "socks5://localhost:9050"},
     # ),  # to use onion proxy (tor)
 )
 history: list = []
