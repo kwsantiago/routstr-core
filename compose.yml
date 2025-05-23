@@ -7,6 +7,8 @@ services:
       - .:/app
     env_file:
       - .env
+    ports:
+      - "8000:8000"  # ← This line is added
 
   tor:
     image: ghcr.io/hundehausen/tor-hidden-service:latest

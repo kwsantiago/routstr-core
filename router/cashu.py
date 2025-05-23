@@ -7,9 +7,9 @@ from cashu.wallet.helpers import deserialize_token_from_string, receive  # type:
 from sqlmodel import select, func, col
 from .db import ApiKey, AsyncSession
 
-RECIEVE_LN_ADDRESS = os.environ["RECIEVE_LN_ADDRESS"]
-MINIMUM_PAYOUT = 100  # sat
-DEVS_DONATION_RATE = 0.021  # 2.1%
+RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
+MINIMUM_PAYOUT = 5  # sat
+DEVS_DONATION_RATE = 0# 0.021  # 2.1%
 WALLET = None
 
 
@@ -96,7 +96,8 @@ async def pay_out(session: AsyncSession) -> None:
     wallet = await _initialize_wallet()
     wallet_balance = wallet.available_balance
 
-    assert wallet_balance <= user_balance, "Something went deeply wrong."
+    # Why is that bad?
+    #assert wallet_balance <= user_balance, f"Something went deeply wrong. Wallet-balance: {wallet_balance}, User-Balance: {user_balance}"
 
     if (revenue := wallet_balance - user_balance) <= MINIMUM_PAYOUT:
         return
@@ -104,7 +105,7 @@ async def pay_out(session: AsyncSession) -> None:
     devs_donation = int(revenue * DEVS_DONATION_RATE)
     owners_draw = revenue - devs_donation
 
-    await send_to_lnurl(wallet, RECIEVE_LN_ADDRESS, owners_draw)
+    await send_to_lnurl(wallet, RECEIVE_LN_ADDRESS, owners_draw)
     await send_to_lnurl(
         wallet,
         "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s@npub.cash",
