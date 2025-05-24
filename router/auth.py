@@ -51,7 +51,7 @@ async def validate_bearer_key(bearer_key: str, session: AsyncSession) -> ApiKey:
 
 async def pay_for_request(key: ApiKey, session: AsyncSession) -> None:
     if key.balance < COST_PER_REQUEST:
-        raise HTTPException(status_code=402, detail="Insufficient balance")
+        raise HTTPException(status_code=402, detail=f"Insufficient balance: {COST_PER_REQUEST} mSats required. {key.balance} available.")
 
     # Charge the base cost for the request
     key.balance -= COST_PER_REQUEST

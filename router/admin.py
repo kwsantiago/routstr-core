@@ -80,13 +80,54 @@ def admin_auth() -> str:
         return login_form()
 
 
-def dashboard(request: Request) -> str:
-    return info("Admin dashboard")
+from sqlmodel import select
+from .db import ApiKey, create_session
 
+async def dashboard(request: Request) -> str:
+    async with create_session() as session:
+        result = await session.exec(select(ApiKey))
+        api_keys = result.all()
+    api_keys_table_rows = "".join(
+        f"<tr><td>{key.hashed_key}</td><td>{key.balance}</td><td>{key.refund_address}</td><td>{key.total_spent}</td><td>{key.total_requests}</td></tr>"
+        for key in api_keys
+    )
+
+
+    return f"""<!DOCTYPE html>
+    <html>
+        <head>
+            <style>
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                }}
+                th, td {{
+                    border: 1px solid black;
+                    padding: 8px;
+                    text-align: left;
+                }}
+            </style>
+        </head>
+        <body>
+            <h1>Admin Dashboard</h1>
+            <h2>API Keys</h2>
+            <table>
+                <tr>
+                    <th>Hashed Key</th>
+                    <th>Balance (mSats)</th>
+                    <th>Refund Address</th>
+                    <th>Total Spent(mSats)</th>
+                    <th>Total Requests</th>
+                </tr>
+                {api_keys_table_rows}
+            </table>
+        </body>
+    </html>
+    """
 
 @admin_router.get("/", response_class=HTMLResponse)
 async def admin(request: Request):
     admin_cookie = request.cookies.get("admin_password")
     if admin_cookie and admin_cookie == os.getenv("ADMIN_PASSWORD"):
-        return dashboard(request)
+        return await dashboard(request)
     return admin_auth()

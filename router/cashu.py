@@ -96,9 +96,10 @@ async def pay_out(session: AsyncSession) -> None:
     wallet = await _initialize_wallet()
     wallet_balance = wallet.available_balance
 
+
+    print(f"Wallet-balance: {wallet_balance}, User-balance: {user_balance}, Revenue: {wallet_balance - user_balance}, MinPayout:{MINIMUM_PAYOUT}", flush=True)
     # Why is that bad?
     #assert wallet_balance <= user_balance, f"Something went deeply wrong. Wallet-balance: {wallet_balance}, User-Balance: {user_balance}"
-
     if (revenue := wallet_balance - user_balance) <= MINIMUM_PAYOUT:
         return
 
