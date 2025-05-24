@@ -9,7 +9,7 @@ from .db import ApiKey, AsyncSession
 
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
 MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
-MINIMUM_PAYOUT = os.environ.get("MINIMUM_PAYOUT", 10)
+MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 10))
 DEVS_DONATION_RATE = 0 # 0.021  # 2.1%
 WALLET = None
 

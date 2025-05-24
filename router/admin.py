@@ -1,6 +1,7 @@
 import os
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
+from .cashu import _initialize_wallet
 
 admin_router = APIRouter(prefix="/admin")
 
@@ -84,6 +85,8 @@ from sqlmodel import select
 from .db import ApiKey, create_session
 
 async def dashboard(request: Request) -> str:
+
+    # fetch cashu / api-key data from database
     async with create_session() as session:
         result = await session.exec(select(ApiKey))
         api_keys = result.all()
@@ -91,6 +94,10 @@ async def dashboard(request: Request) -> str:
         f"<tr><td>{key.hashed_key}</td><td>{key.balance}</td><td>{key.refund_address}</td><td>{key.total_spent}</td><td>{key.total_requests}</td></tr>"
         for key in api_keys
     )
+
+    # Fetch balance from cashu
+    wallet = await _initialize_wallet()
+    current_balance = wallet.balance  # Not awaited, assuming it's a property
 
 
     return f"""<!DOCTYPE html>
@@ -110,7 +117,9 @@ async def dashboard(request: Request) -> str:
         </head>
         <body>
             <h1>Admin Dashboard</h1>
-            <h2>API Keys</h2>
+            <h2>Current Cashu Balance (including user balances)</h2>
+            <p>{current_balance} sats</p>
+            <h2>User's API Keys</h2>
             <table>
                 <tr>
                     <th>Hashed Key</th>
@@ -131,3 +140,4 @@ async def admin(request: Request):
     if admin_cookie and admin_cookie == os.getenv("ADMIN_PASSWORD"):
         return await dashboard(request)
     return admin_auth()
+
