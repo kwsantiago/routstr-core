@@ -9,8 +9,8 @@ from .db import ApiKey, AsyncSession
 
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
 MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
-MINIMUM_PAYOUT = 2  # sat (todo move to .env)
-DEVS_DONATION_RATE = 0# 0.021  # 2.1%
+MINIMUM_PAYOUT = os.environ.get("MINIMUM_PAYOUT", 10)
+DEVS_DONATION_RATE = 0 # 0.021  # 2.1%
 WALLET = None
 
 
@@ -110,11 +110,13 @@ async def pay_out(session: AsyncSession) -> None:
 
 
     await send_to_lnurl(wallet, RECEIVE_LN_ADDRESS, owners_draw * 1000) # conversion to msats for send_to_lnurl
-    await send_to_lnurl(
-        wallet,
-        "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s@npub.cash",
-        devs_donation * 1000,
-    )
+    
+    if devs_donation > 0:
+        await send_to_lnurl(
+            wallet,
+            "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s@npub.cash",
+            devs_donation * 1000,
+        )
 
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
@@ -209,16 +211,17 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
             f"({min_sendable / 1000} - {max_sendable / 1000} sat)."
         )
     # subtract estimated fees
-    amount_to_send = amount_msat - int(max(2000, amount_msat * 0.01))
+    amount_to_send = amount_msat - int(max(5000, amount_msat * 0.01))
 
 
-    print(f"trying to pay a {amount_to_send} msats to {lnurl}", flush=True)
+    print(f"trying to pay {amount_to_send} msats to {lnurl}", flush=True)
+    print(f"Available balance: {wallet.balance}", flush = True )
     # Note: We pass amount_msat directly. The actual amount paid might be adjusted
     # slightly by the melt quote based on the invoice details.
     bolt11_invoice, _ = await _get_lnurl_invoice(callback_url, amount_to_send)
 
-
-    amount_paid = await _pay_invoice_with_cashu(wallet, bolt11_invoice, amount_to_send)
+    # Conversion to Sats (/ 1000 necessary for cashu payments)
+    amount_paid = await _pay_invoice_with_cashu(wallet, bolt11_invoice, amount_to_send / 1000)
 
     print(f"{amount_paid} sats paid to lnurl", flush=True)
 

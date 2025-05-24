@@ -84,7 +84,7 @@ async def adjust_payment_for_tokens(
         model = next(model for model in MODELS if model.id == response_model)
         if model.sats_pricing is None:
             raise HTTPException(status_code=400, detail="Model pricing not defined")
-
+        # TODO: Rename,  This is named very close to COST_PER_1K_OUTPUT_TOKENS
         MSATS_PER_1K_INPUT_TOKENS = model.sats_pricing.prompt * 1_000_000
         MSATS_PER_1K_OUTPUT_TOKENS = model.sats_pricing.completion * 1_000_000
 
