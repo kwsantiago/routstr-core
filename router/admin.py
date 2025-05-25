@@ -91,7 +91,7 @@ async def dashboard(request: Request) -> str:
         result = await session.exec(select(ApiKey))
         api_keys = result.all()
     api_keys_table_rows = "".join(
-        f"<tr><td>{key.hashed_key}</td><td>{key.balance}</td><td>{key.refund_address}</td><td>{key.total_spent}</td><td>{key.total_requests}</td></tr>"
+        f"<tr><td>{key.hashed_key}</td><td>{key.balance}</td><td>{key.total_spent}</td><td>{key.total_requests}</td><td>{key.refund_address}</td><td>{key.key_expiry_time}</td></tr>"
         for key in api_keys
     )
 
@@ -124,9 +124,10 @@ async def dashboard(request: Request) -> str:
                 <tr>
                     <th>Hashed Key</th>
                     <th>Balance (mSats)</th>
-                    <th>Refund Address</th>
-                    <th>Total Spent(mSats)</th>
+                    <th>Total Spent (mSats)</th>
                     <th>Total Requests</th>
+                    <th>Refund Address</th>
+                    <th>Refund Time</th>
                 </tr>
                 {api_keys_table_rows}
             </table>

@@ -1,11 +1,13 @@
 import os
 import httpx
+import asyncio
+import time
 
 from cashu.core.base import Token  # type: ignore
 from cashu.wallet.wallet import Wallet  # type: ignore
 from cashu.wallet.helpers import deserialize_token_from_string, receive  # type: ignore
 from sqlmodel import select, func, col
-from .db import ApiKey, AsyncSession
+from .db import ApiKey, AsyncSession, get_session
 
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
 MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
@@ -19,7 +21,7 @@ WALLET = None
 async def _initialize_wallet(mint_url: str | None = None) -> Wallet:
     """Initializes and loads a Cashu wallet."""
     global WALLET
-    if WALLET is not None and WALLET.mint_url == mint_url: # only return existing wallet if the mint_url matches the one of current WALLET
+    if WALLET is not None:
         return WALLET
     if mint_url is None:
         mint_url = MINT
@@ -85,6 +87,25 @@ async def _pay_invoice_with_cashu(
     return quote.amount
 
 
+async def check_for_refunds() -> None:
+    while True:
+        try:
+            async for session in get_session():
+                result = await session.exec(select(ApiKey))
+                keys = result.all()
+
+                for key in keys:
+                    if(key.balance > 0 and key.refund_address and key.key_expiry_time and key.key_expiry_time < time.time()):
+                        print(f"Refunding key {key.hashed_key}, {time.time()=}, {key.key_expiry_time=}")
+                        await refund_balance(key.balance, key, session)
+                     #TODO Error balance to low
+
+        except Exception as e:
+            print(f"Error during refund check: {e}")
+        #TODO Define time to sleep # hour: 3600
+        await asyncio.sleep(10)
+
+
 async def pay_out(session: AsyncSession) -> None:
     """
     Calculates the pay-out amount based on the spent balance, profit, and donation rate.
@@ -123,13 +144,22 @@ async def pay_out(session: AsyncSession) -> None:
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
     token_obj: Token = deserialize_token_from_string(cashu_token)
-    token_mint =  await _initialize_wallet(token_obj.mint)
+    # Initialize the wallet with the mint specified in the token
+    print(f"Trying to credit token from mint: {token_obj.mint}", flush=True)
     wallet: Wallet = await _initialize_wallet(token_obj.mint)
-    amount_msats = await _handle_token_receive(wallet, token_obj)
-    key.balance += amount_msats
-    session.add(key)
-    await session.commit()
-    return amount_msats
+    if token_obj.mint == MINT:
+        # crediting a token created using the same mint as specified in .env
+        print("Received a token from the same mint", flush=True)
+
+        amount_msats = await _handle_token_receive(wallet, token_obj)
+        key.balance += amount_msats
+        session.add(key)
+        await session.commit()
+        return amount_msats
+    else: 
+        # crediting a token created using a different mint as specified in .env
+        print("Received a token from a different mint", flush=True)
+        #TODO 
 
 
 async def refund_balance(amount: int, key: ApiKey, session: AsyncSession) -> int:
@@ -143,7 +173,7 @@ async def refund_balance(amount: int, key: ApiKey, session: AsyncSession) -> int
     await session.commit()
     if key.refund_address is None:
         raise ValueError("Refund address not set.")
-    return await send_to_lnurl(wallet, key.refund_address, amount_msat=amount) # todo msats / sats conversion error?
+    return await send_to_lnurl(wallet, key.refund_address, amount_msat=amount * 1000) # todo msats / sats conversion error?
 
 
 async def create_token(
