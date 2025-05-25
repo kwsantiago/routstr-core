@@ -13,11 +13,13 @@ MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 10))
 DEVS_DONATION_RATE = 0 # 0.021  # 2.1%
 WALLET = None
 
-
+#TODO
+# This causes problems when users send tokens from other mints
+# WALLET is already set so it returns the specified wallet, but this wallet does not know the keyset of the token 
 async def _initialize_wallet(mint_url: str | None = None) -> Wallet:
     """Initializes and loads a Cashu wallet."""
     global WALLET
-    if WALLET is not None:
+    if WALLET is not None and WALLET.mint_url == mint_url: # only return existing wallet if the mint_url matches the one of current WALLET
         return WALLET
     if mint_url is None:
         mint_url = MINT
@@ -121,6 +123,7 @@ async def pay_out(session: AsyncSession) -> None:
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
     token_obj: Token = deserialize_token_from_string(cashu_token)
+    token_mint =  await _initialize_wallet(token_obj.mint)
     wallet: Wallet = await _initialize_wallet(token_obj.mint)
     amount_msats = await _handle_token_receive(wallet, token_obj)
     key.balance += amount_msats
