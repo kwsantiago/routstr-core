@@ -10,7 +10,7 @@ from .db import ApiKey, AsyncSession
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
 MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
 MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 10))
-DEVS_DONATION_RATE = 0 # 0.021  # 2.1%
+DEVS_DONATION_RATE = 0.021  # 2.1%
 WALLET = None
 
 #TODO
@@ -19,7 +19,7 @@ WALLET = None
 async def _initialize_wallet(mint_url: str | None = None) -> Wallet:
     """Initializes and loads a Cashu wallet."""
     global WALLET
-    if WALLET is not None and WALLET.mint_url == mint_url: # only return existing wallet if the mint_url matches the one of current WALLET
+    if WALLET is not None:
         return WALLET
     if mint_url is None:
         mint_url = MINT
@@ -100,6 +100,7 @@ async def pay_out(session: AsyncSession) -> None:
     wallet = await _initialize_wallet()
     wallet_balance = wallet.available_balance
 
+    assert wallet_balance <= user_balance, "Something went deeply wrong."
 
     print(f"Wallet-balance: {wallet_balance}, User-balance: {user_balance}, Revenue: {wallet_balance - user_balance}, MinPayout:{MINIMUM_PAYOUT}", flush=True)
     # Why is that bad?
@@ -214,7 +215,7 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
             f"({min_sendable / 1000} - {max_sendable / 1000} sat)."
         )
     # subtract estimated fees
-    amount_to_send = amount_msat - int(max(5000, amount_msat * 0.01))
+    amount_to_send = amount_msat - int(max(2000, amount_msat * 0.01))
 
 
     print(f"trying to pay {amount_to_send} msats to {lnurl}", flush=True)
