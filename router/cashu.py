@@ -9,7 +9,7 @@ from .db import ApiKey, AsyncSession
 
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
 MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
-MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 10))
+MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 100))
 DEVS_DONATION_RATE = 0.021  # 2.1%
 WALLET = None
 
@@ -124,7 +124,6 @@ async def pay_out(session: AsyncSession) -> None:
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
     token_obj: Token = deserialize_token_from_string(cashu_token)
-    token_mint =  await _initialize_wallet(token_obj.mint)
     wallet: Wallet = await _initialize_wallet(token_obj.mint)
     amount_msats = await _handle_token_receive(wallet, token_obj)
     key.balance += amount_msats
@@ -144,7 +143,7 @@ async def refund_balance(amount: int, key: ApiKey, session: AsyncSession) -> int
     await session.commit()
     if key.refund_address is None:
         raise ValueError("Refund address not set.")
-    return await send_to_lnurl(wallet, key.refund_address, amount_msat=amount) # todo msats / sats conversion error?
+    return await send_to_lnurl(wallet, key.refund_address, amount_msat=amount) #Todo: Check possible msats / sats conversion error?
 
 
 async def create_token(
@@ -218,8 +217,7 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
     amount_to_send = amount_msat - int(max(2000, amount_msat * 0.01))
 
 
-    print(f"trying to pay {amount_to_send} msats to {lnurl}", flush=True)
-    print(f"Available balance: {wallet.balance}", flush = True )
+    print(f"trying to pay {amount_to_send} msats to {lnurl}. Available balance: {wallet.balance}", flush=True)
     # Note: We pass amount_msat directly. The actual amount paid might be adjusted
     # slightly by the melt quote based on the invoice details.
     bolt11_invoice, _ = await _get_lnurl_invoice(callback_url, amount_to_send)

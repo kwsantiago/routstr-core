@@ -48,7 +48,6 @@ async def update_sats_pricing() -> None:
                 model.sats_pricing = Pricing(
                     **{k: v / sats_to_usd for k, v in model.pricing.dict().items()}
                 )
-                #print(f"Prices (mSats): {model.sats_pricing}", flush=True)
         except Exception as e:
             print(e)
         await asyncio.sleep(10)
