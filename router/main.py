@@ -9,6 +9,7 @@ from .proxy import proxy_router
 from .account import account_router
 from .cashu import _initialize_wallet
 from .models import MODELS, update_sats_pricing
+from .discovery import providers_router
 
 __version__ = "0.0.1"
 
@@ -45,6 +46,7 @@ async def info():
 
 app.include_router(admin_router)
 app.include_router(account_router)
+app.include_router(providers_router)
 app.include_router(proxy_router)
 
 
