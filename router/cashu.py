@@ -231,7 +231,7 @@ async def get_lnurl_data(lnurl: str) -> tuple[str, int, int]:
     elif lnurl.lower().startswith("lnurl"):
         try:
             # Optional import for environments where bech32 might not be present initially
-            from bech32 import bech32_decode, convertbits
+            from bech32 import bech32_decode, convertbits  # type: ignore
 
             hrp, data = bech32_decode(lnurl)
             if data is None:
