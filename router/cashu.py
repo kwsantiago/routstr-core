@@ -8,6 +8,7 @@ from sqlmodel import select, func, col
 from .db import ApiKey, AsyncSession
 
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
+DEV_LN_ADDRESS = "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s@npub.cash"
 MINIMUM_PAYOUT = 100  # sat
 DEVS_DONATION_RATE = 0.021  # 2.1%
 WALLET = None
@@ -109,16 +110,16 @@ async def pay_out(session: AsyncSession) -> None:
             # No balance to pay out - this is OK, not an error
             return
         
-        user_balance = balance // 1000
+        user_balance_sats = balance // 1000  # Convert msats to sats
         wallet = await _initialize_wallet()
-        wallet_balance = wallet.available_balance
+        wallet_balance_sats = wallet.available_balance  # Already in sats
 
         # Handle edge cases more gracefully
-        if wallet_balance > user_balance:
-            print(f"Warning: Wallet balance ({wallet_balance}) exceeds user balance ({user_balance}). Skipping payout.")
+        if wallet_balance_sats < user_balance_sats:
+            print(f"Warning: Wallet balance ({wallet_balance_sats} sats) is less than user balance ({user_balance_sats} sats). Skipping payout.")
             return
 
-        if (revenue := user_balance - wallet_balance) <= MINIMUM_PAYOUT:
+        if (revenue := wallet_balance_sats - user_balance_sats) <= MINIMUM_PAYOUT:
             # Not enough revenue yet - this is OK
             return
 
@@ -126,10 +127,12 @@ async def pay_out(session: AsyncSession) -> None:
         owners_draw = revenue - devs_donation
 
         # Send payouts
+        print(f"Sending {owners_draw} sats to {RECEIVE_LN_ADDRESS}")
         await send_to_lnurl(wallet, RECEIVE_LN_ADDRESS, owners_draw * 1000)  # Convert to msats
+        print(f"Sending {devs_donation} sats to {DEV_LN_ADDRESS}")
         await send_to_lnurl(
             wallet,
-            "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s@npub.cash",
+            DEV_LN_ADDRESS,
             devs_donation * 1000,  # Convert to msats
         )
     except Exception as e:
