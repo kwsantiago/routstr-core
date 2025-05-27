@@ -87,25 +87,6 @@ async def _pay_invoice_with_cashu(
     return quote.amount
 
 
-async def check_for_refunds() -> None:
-    while True:
-        try:
-            async for session in get_session():
-                result = await session.exec(select(ApiKey))
-                keys = result.all()
-
-                for key in keys:
-                    if(key.balance > 0 and key.refund_address and key.key_expiry_time and key.key_expiry_time < time.time()):
-                        print(f"Refunding key {key.hashed_key}, {time.time()=}, {key.key_expiry_time=}")
-                        await refund_balance(key.balance, key, session)
-                     #TODO Error balance to low
-
-        except Exception as e:
-            print(f"Error during refund check: {e}")
-        #TODO Define time to sleep # hour: 3600
-        await asyncio.sleep(10)
-
-
 async def pay_out(session: AsyncSession) -> None:
     """
     Calculates the pay-out amount based on the spent balance, profit, and donation rate.
@@ -121,10 +102,8 @@ async def pay_out(session: AsyncSession) -> None:
     wallet = await _initialize_wallet()
     wallet_balance = wallet.available_balance
 
-
     print(f"Wallet-balance: {wallet_balance}, User-balance: {user_balance}, Revenue: {wallet_balance - user_balance}, MinPayout:{MINIMUM_PAYOUT}", flush=True)
-    # Why is that bad?
-    #assert wallet_balance <= user_balance, f"Something went deeply wrong. Wallet-balance: {wallet_balance}, User-Balance: {user_balance}"
+    assert wallet_balance >= user_balance, f"Something went deeply wrong. Wallet-balance: {wallet_balance}, User-Balance: {user_balance}"
     if (revenue := wallet_balance - user_balance) <= MINIMUM_PAYOUT:
         return
 
@@ -132,6 +111,7 @@ async def pay_out(session: AsyncSession) -> None:
     owners_draw = revenue - devs_donation
 
 
+    print(f"       DEBUG   Revenue > Minimum Payout: paying {owners_draw} sats to {RECEIVE_LN_ADDRESS}", flush=True)
     await send_to_lnurl(wallet, RECEIVE_LN_ADDRESS, owners_draw * 1000) # conversion to msats for send_to_lnurl
     
     if devs_donation > 0:
@@ -162,7 +142,42 @@ async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -
         #TODO 
 
 
+# TODO i think the wallet.balance is not updated correctly after refunds
+# TODO what happens if minimum payout gets reached by a request that needs to be refunded
+async def check_for_refunds() -> None:
+    while True:
+        try:
+            async for session in get_session():
+                result = await session.exec(select(ApiKey))
+                keys = result.all()
+
+                for key in keys:
+                    if(key.balance > 0 and key.refund_address and key.key_expiry_time and key.key_expiry_time < time.time()):
+                        print(f"       DEBUG   Refunding key {key.hashed_key[:3] + '[...]' + key.hashed_key[-3:]}, Current Time: {int(time.time())}, Expirary Time: {key.key_expiry_time}", flush = True)
+                        await refund_balance(key.balance, key, session)
+                     #TODO Error balance to low
+            await asyncio.sleep(30)
+            #TODO Define time to sleep # hour: 3600
+        except Exception as e:
+            print(f"Error during refund check: {e}")
+        
+
+
 async def refund_balance(amount: int, key: ApiKey, session: AsyncSession) -> int:
+    """
+    Refunds the specified amount from an API key's balance to the key's refund address.
+
+    Args:
+        amount (int): The amount to refund in millisatoshis.
+        key (ApiKey): The API key object containing balance and refund address.
+        session (AsyncSession): The database session for committing changes.
+
+    Returns:
+        int:  The amount in millisatoshis that was successfully sent.
+
+    Raises:
+        ValueError: If balance is insufficient or refund address is not set.
+    """
     wallet = await _initialize_wallet()
     if key.balance < amount:
         raise ValueError("Insufficient balance.")
@@ -173,8 +188,7 @@ async def refund_balance(amount: int, key: ApiKey, session: AsyncSession) -> int
     await session.commit()
     if key.refund_address is None:
         raise ValueError("Refund address not set.")
-    return await send_to_lnurl(wallet, key.refund_address, amount_msat=amount * 1000) # todo msats / sats conversion error?
-
+    return await send_to_lnurl(wallet, key.refund_address, amount_msat=amount)
 
 async def create_token(
     amount_msats: int, mint: str = MINT
@@ -244,19 +258,20 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
             f"({min_sendable / 1000} - {max_sendable / 1000} sat)."
         )
     # subtract estimated fees
-    amount_to_send = amount_msat - int(max(5000, amount_msat * 0.01))
+    # TODO: Is a static fee calculation working well? 
+    # moving the 2000 and 0.01 to optional enviroment variables gives more control to users
+    amount_to_send = amount_msat - int(max(2000, amount_msat * 0.01))
 
+    print(f"       DEBUG   Trying to pay {amount_to_send} msats to {lnurl}, with Wallet balance = {wallet.balance}", flush = True)
 
-    print(f"trying to pay {amount_to_send} msats to {lnurl}", flush=True)
-    print(f"Available balance: {wallet.balance}", flush = True )
     # Note: We pass amount_msat directly. The actual amount paid might be adjusted
     # slightly by the melt quote based on the invoice details.
     bolt11_invoice, _ = await _get_lnurl_invoice(callback_url, amount_to_send)
 
-    # Conversion to Sats (/ 1000 necessary for cashu payments)
+    # Conversion to Sats (/ 1000) necessary for cashu payments
     amount_paid = await _pay_invoice_with_cashu(wallet, bolt11_invoice, amount_to_send / 1000)
 
-    print(f"{amount_paid} sats paid to lnurl", flush=True)
+    print(f"       DEBUG   {amount_paid} sats paid to lnurl", flush=True)
 
     return amount_paid
 
