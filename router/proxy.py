@@ -27,7 +27,41 @@ async def proxy(
     bearer_key = auth.replace("Bearer ", "") if auth.startswith("Bearer ") else ""
 
     key = await validate_bearer_key(bearer_key, session)
-    await pay_for_request(key, session, request)
+    
+    # Pre-validate JSON for requests that require it
+    request_body = None
+    if request.method in ["POST", "PUT", "PATCH"] and path.endswith("chat/completions"):
+        try:
+            request_body = await request.body()
+            # Try to parse JSON to validate it
+            if request_body:
+                json.loads(request_body)
+        except json.JSONDecodeError as e:
+            return Response(
+                content=json.dumps({
+                    "error": {
+                        "message": f"Invalid JSON in request body: {str(e)}",
+                        "type": "invalid_request_error",
+                        "code": "invalid_json"
+                    }
+                }),
+                status_code=400,
+                media_type="application/json"
+            )
+        except Exception as e:
+            return Response(
+                content=json.dumps({
+                    "error": {
+                        "message": "Error reading request body",
+                        "type": "invalid_request_error",
+                        "code": "request_error"
+                    }
+                }),
+                status_code=400,
+                media_type="application/json"
+            )
+    
+    await pay_for_request(key, session, request, request_body)
 
     # Prepare headers, removing sensitive/problematic ones
     headers = dict(request.headers)
@@ -48,16 +82,29 @@ async def proxy(
     client = httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(retries=1))
 
     try:
-        response = await client.send(
-            client.build_request(
-                request.method,
-                url,
-                headers=headers,
-                content=request.stream(),
-                params=request.query_params,
-            ),
-            stream=True,
-        )
+        # Use the pre-read body if available, otherwise stream
+        if request_body is not None:
+            response = await client.send(
+                client.build_request(
+                    request.method,
+                    url,
+                    headers=headers,
+                    content=request_body,
+                    params=request.query_params,
+                ),
+                stream=True,
+            )
+        else:
+            response = await client.send(
+                client.build_request(
+                    request.method,
+                    url,
+                    headers=headers,
+                    content=request.stream(),
+                    params=request.query_params,
+                ),
+                stream=True,
+            )
 
         # For chat completions, we need to handle token-based pricing
         if path.endswith("chat/completions"):
@@ -168,14 +215,34 @@ async def proxy(
 
     except httpx.RequestError as exc:
         await client.aclose()
+        error_type = type(exc).__name__
+        error_details = str(exc)
         print(
-            f"Error forwarding request to upstream: {exc}\n"
+            f"Error forwarding request to upstream: {error_type}: {error_details}\n"
             f"Request details: method={request.method}, url={url}, headers={headers}, "
             f"path={path}, query_params={dict(request.query_params)}"
         )
+        
+        # Provide more specific error messages based on the error type
+        if isinstance(exc, httpx.ConnectError):
+            error_message = "Unable to connect to upstream service"
+        elif isinstance(exc, httpx.TimeoutException):
+            error_message = "Upstream service request timed out"
+        elif isinstance(exc, httpx.NetworkError):
+            error_message = "Network error while connecting to upstream service"
+        else:
+            error_message = f"Error connecting to upstream service: {error_type}"
+            
         return Response(
-            content=f"Error connecting to upstream service: {exc}",
+            content=json.dumps({
+                "error": {
+                    "message": error_message,
+                    "type": "upstream_error",
+                    "code": 502
+                }
+            }),
             status_code=502,
+            media_type="application/json"
         )
     except Exception as exc:
         await client.aclose()
@@ -188,6 +255,13 @@ async def proxy(
             f"Traceback:\n{tb}"
         )
         return Response(
-            content=f"Unexpected server error: {exc}",
+            content=json.dumps({
+                "error": {
+                    "message": "An unexpected server error occurred",
+                    "type": "internal_error",
+                    "code": 500
+                }
+            }),
             status_code=500,
+            media_type="application/json"
         )
