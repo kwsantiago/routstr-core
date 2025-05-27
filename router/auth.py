@@ -1,9 +1,10 @@
+import asyncio
 import hashlib
 import os
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
-from .cashu import credit_balance, pay_out
+from .cashu import credit_balance, pay_out_with_new_session
 from .db import ApiKey, AsyncSession
 from .models import MODELS
 
@@ -49,7 +50,16 @@ async def validate_bearer_key(bearer_key: str, session: AsyncSession) -> ApiKey:
     raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-async def pay_for_request(key: ApiKey, session: AsyncSession) -> None:
+async def pay_for_request(key: ApiKey, session: AsyncSession, request: Request | None) -> None:
+    if MODEL_BASED_PRICING and os.path.exists("models.json"):
+        body = await request.json()
+        if request_model := body.get("model"):
+            if request_model not in [model.id for model in MODELS]:
+                raise HTTPException(status_code=400, detail="Invalid model")
+            model = next(model for model in MODELS if model.id == request_model)
+            if key.balance < model.sats_pricing.max_cost:
+                raise HTTPException(413, detail=f"This model requires a minimum balance of {model.sats_pricing.max_cost}, sats.")
+
     if key.balance < COST_PER_REQUEST:
         raise HTTPException(status_code=402, detail="Insufficient balance")
 
@@ -77,6 +87,15 @@ async def adjust_payment_for_tokens(
         "total_msats": COST_PER_REQUEST,
     }
 
+    # Check if we have usage data
+    if "usage" not in response_data or response_data["usage"] is None:
+        print("No usage data in response, using base cost only")
+        return cost_data
+
+    # Default to configured pricing
+    MSATS_PER_1K_INPUT_TOKENS = COST_PER_1K_INPUT_TOKENS
+    MSATS_PER_1K_OUTPUT_TOKENS = COST_PER_1K_OUTPUT_TOKENS
+
     if MODEL_BASED_PRICING and os.path.exists("models.json"):
         response_model = response_data.get("model", "")
         if response_model not in [model.id for model in MODELS]:
@@ -89,7 +108,8 @@ async def adjust_payment_for_tokens(
         MSATS_PER_1K_OUTPUT_TOKENS = model.sats_pricing.completion * 1_000_000
 
     if not (MSATS_PER_1K_OUTPUT_TOKENS and MSATS_PER_1K_INPUT_TOKENS):
-        raise HTTPException(status_code=400, detail="Model pricing not defined")
+        # If no token pricing is configured, just return base cost
+        return cost_data
 
     input_tokens = response_data.get("usage", {}).get("prompt_tokens", 0)
     output_tokens = response_data.get("usage", {}).get("completion_tokens", 0)
@@ -131,6 +151,6 @@ async def adjust_payment_for_tokens(
     session.add(key)
     await session.commit()
 
-    await pay_out(session)
+    asyncio.create_task(pay_out_with_new_session())
 
     return cost_data
