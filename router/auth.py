@@ -76,12 +76,10 @@ async def validate_bearer_key(bearer_key: str, session: AsyncSession) -> ApiKey:
     )
 
 
-async def pay_for_request(key: ApiKey, session: AsyncSession, request: Request | None, request_body: bytes | None = None) -> None:
+async def pay_for_request(key: ApiKey, session: AsyncSession, request_body: bytes | None = None) -> None:
     if MODEL_BASED_PRICING and os.path.exists("models.json"):
         if request_body:
             body = json.loads(request_body)
-        else:
-            body = await request.json()
         if request_model := body.get("model"):
             if request_model not in [model.id for model in MODELS]:
                 raise HTTPException(
@@ -95,9 +93,9 @@ async def pay_for_request(key: ApiKey, session: AsyncSession, request: Request |
                     }
                 )
             model = next(model for model in MODELS if model.id == request_model)
-            if key.balance < model.sats_pricing.max_cost:
+            if key.balance < model.sats_pricing.max_cost * 1000:
                 raise HTTPException(
-                    status_code=402,
+                    status_code=413,
                     detail={
                         "error": {
                             "message": f"This model requires a minimum balance of {model.sats_pricing.max_cost} sats",
