@@ -20,7 +20,7 @@ class Pricing(BaseModel):
     image: float
     web_search: float
     internal_reasoning: float
-    max_cost: float = 0.0
+    max_cost: float = 0.0  # in sats not msats
 
 class TopProvider(BaseModel):
     context_length: int | None = None
