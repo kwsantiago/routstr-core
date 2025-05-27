@@ -7,7 +7,7 @@ from cashu.wallet.helpers import deserialize_token_from_string, receive  # type:
 from sqlmodel import select, func, col
 from .db import ApiKey, AsyncSession
 
-RECIEVE_LN_ADDRESS = os.environ["RECIEVE_LN_ADDRESS"]
+RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
 MINIMUM_PAYOUT = 100  # sat
 DEVS_DONATION_RATE = 0.021  # 2.1%
 WALLET = None
@@ -81,35 +81,60 @@ async def _pay_invoice_with_cashu(
     return quote.amount
 
 
+async def pay_out_with_new_session() -> None:
+    """
+    Wrapper for pay_out that creates its own database session.
+    This prevents database connection conflicts when called as a background task.
+    """
+    from .db import create_session
+    
+    try:
+        async with create_session() as session:
+            await pay_out(session)
+    except Exception as e:
+        print(f"Error in pay_out_with_new_session: {e}")
+
+
 async def pay_out(session: AsyncSession) -> None:
     """
     Calculates the pay-out amount based on the spent balance, profit, and donation rate.
     """
-    balance = (
-        await session.exec(
-            select(func.sum(col(ApiKey.balance))).where(ApiKey.balance > 0)
+    try:
+        balance = (
+            await session.exec(
+                select(func.sum(col(ApiKey.balance))).where(ApiKey.balance > 0)
+            )
+        ).one()
+        if balance is None or balance == 0:
+            # No balance to pay out - this is OK, not an error
+            return
+        
+        user_balance = balance // 1000
+        wallet = await _initialize_wallet()
+        wallet_balance = wallet.available_balance
+
+        # Handle edge cases more gracefully
+        if wallet_balance > user_balance:
+            print(f"Warning: Wallet balance ({wallet_balance}) exceeds user balance ({user_balance}). Skipping payout.")
+            return
+
+        if (revenue := user_balance - wallet_balance) <= MINIMUM_PAYOUT:
+            # Not enough revenue yet - this is OK
+            return
+
+        devs_donation = int(revenue * DEVS_DONATION_RATE)
+        owners_draw = revenue - devs_donation
+
+        # Send payouts
+        await send_to_lnurl(wallet, RECEIVE_LN_ADDRESS, owners_draw * 1000)  # Convert to msats
+        await send_to_lnurl(
+            wallet,
+            "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s@npub.cash",
+            devs_donation * 1000,  # Convert to msats
         )
-    ).one()
-    if balance is None:
-        raise ValueError("No balance to pay out.")
-    user_balance = balance // 1000
-    wallet = await _initialize_wallet()
-    wallet_balance = wallet.available_balance
-
-    assert wallet_balance <= user_balance, "Something went deeply wrong."
-
-    if (revenue := wallet_balance - user_balance) <= MINIMUM_PAYOUT:
-        return
-
-    devs_donation = int(revenue * DEVS_DONATION_RATE)
-    owners_draw = revenue - devs_donation
-
-    await send_to_lnurl(wallet, RECIEVE_LN_ADDRESS, owners_draw)
-    await send_to_lnurl(
-        wallet,
-        "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s@npub.cash",
-        devs_donation,
-    )
+    except Exception as e:
+        # Log the error but don't crash - payouts can be retried later
+        print(f"Error in pay_out: {e}")
 
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:

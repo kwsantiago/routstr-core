@@ -6,7 +6,7 @@ from fastapi.responses import Response, StreamingResponse
 import httpx
 import re
 
-from router.cashu import pay_out
+from router.cashu import pay_out_with_new_session
 
 from .auth import validate_bearer_key, pay_for_request, adjust_payment_for_tokens
 from .db import AsyncSession, get_session
@@ -27,7 +27,7 @@ async def proxy(
     bearer_key = auth.replace("Bearer ", "") if auth.startswith("Bearer ") else ""
 
     key = await validate_bearer_key(bearer_key, session)
-    await pay_for_request(key, session)
+    await pay_for_request(key, session, request)
 
     # Prepare headers, removing sensitive/problematic ones
     headers = dict(request.headers)
@@ -114,17 +114,10 @@ async def proxy(
                                         usage_data_found = True
                                         break
                                 except json.JSONDecodeError:
-                                    # Not valid JSON, skip
                                     continue
-
-                            if usage_data_found:
-                                break
-
+                            
                         except Exception as e:
-                            print(f"Error processing chunk for cost: {e}")
-
-                    if not usage_data_found:
-                        print("No usage data found in any chunks")
+                            print(f"Error processing streaming response for cost: {e}")
 
                 background_tasks = BackgroundTasks()
                 background_tasks.add_task(response.aclose)
@@ -146,7 +139,6 @@ async def proxy(
                         key, response_json, session
                     )
                     response_json["cost"] = cost_data
-                    asyncio.create_task(pay_out(session))
                     return Response(
                         content=json.dumps(response_json).encode(),
                         status_code=response.status_code,
@@ -165,8 +157,8 @@ async def proxy(
         background_tasks = BackgroundTasks()
         background_tasks.add_task(response.aclose)
         background_tasks.add_task(client.aclose)
+        background_tasks.add_task(pay_out_with_new_session)
 
-        asyncio.create_task(pay_out(session))
         return StreamingResponse(
             response.aiter_bytes(),
             status_code=response.status_code,
@@ -176,14 +168,25 @@ async def proxy(
 
     except httpx.RequestError as exc:
         await client.aclose()
-        print(f"Error forwarding request to upstream: {exc}")
+        print(
+            f"Error forwarding request to upstream: {exc}\n"
+            f"Request details: method={request.method}, url={url}, headers={headers}, "
+            f"path={path}, query_params={dict(request.query_params)}"
+        )
         return Response(
             content=f"Error connecting to upstream service: {exc}",
             status_code=502,
         )
     except Exception as exc:
         await client.aclose()
-        print(f"Unexpected error: {exc}")
+        import traceback
+        tb = traceback.format_exc()
+        print(
+            f"Unexpected error: {exc}\n"
+            f"Request details: method={request.method}, url={url}, headers={headers}, "
+            f"path={path}, query_params={dict(request.query_params)}\n"
+            f"Traceback:\n{tb}"
+        )
         return Response(
             content=f"Unexpected server error: {exc}",
             status_code=500,
