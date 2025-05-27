@@ -79,7 +79,10 @@ async def proxy(
         path = path.replace("v1/", "")
 
     url = f"{UPSTREAM_BASE_URL}/{path}"
-    client = httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(retries=1))
+    client = httpx.AsyncClient(
+        transport=httpx.AsyncHTTPTransport(retries=1),
+        timeout=None  # No timeout - requests can take as long as needed
+    )
 
     try:
         # Use the pre-read body if available, otherwise stream
