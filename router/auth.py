@@ -76,10 +76,12 @@ async def validate_bearer_key(bearer_key: str, session: AsyncSession) -> ApiKey:
     )
 
 
-async def pay_for_request(key: ApiKey, session: AsyncSession, request_body: bytes | None = None) -> None:
+async def pay_for_request(key: ApiKey, session: AsyncSession, request: Request | None, request_body: bytes | None = None) -> None:
     if MODEL_BASED_PRICING and os.path.exists("models.json"):
         if request_body:
             body = json.loads(request_body)
+        else:
+            body = await request.json()
         if request_model := body.get("model"):
             if request_model not in [model.id for model in MODELS]:
                 raise HTTPException(
