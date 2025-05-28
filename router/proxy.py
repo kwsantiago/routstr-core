@@ -37,16 +37,14 @@ async def proxy(
                 content="Invalid Key-Expiry-Time: must be a valid Unix timestamp",
                 status_code=400,
             )
-    else:
-        key_expiry_time = None
-
-    if(key_expiry_time and not refund_address):
-        return Response(
+        if(not refund_address):
+            return Response(
                 content=f"Error: Refund-LNURL header required when using Key-Expiry-Time",
                 status_code=400,
             )
+    else:
+        key_expiry_time = None
     
-
     key = await validate_bearer_key(bearer_key, session, refund_address, key_expiry_time)
     
     # Pre-validate JSON for requests that require it
