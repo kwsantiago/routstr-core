@@ -73,11 +73,13 @@ async def _pay_invoice_with_cashu(
 ) -> int:
     """Pays a BOLT11 invoice using Cashu proofs via melt."""
 
+    amount_to_send_msat = amount_to_send_msat // 1000
     quote = await wallet.melt_quote(bolt11_invoice, amount_to_send_msat)
 
     proofs_to_melt, _ = await wallet.select_to_send(
         wallet.proofs, quote.amount + quote.fee_reserve
     )
+    print(f"Proofs to melt: {proofs_to_melt}")
 
     _ = await wallet.melt(
         proofs_to_melt, bolt11_invoice, quote.fee_reserve, quote.quote
@@ -229,6 +231,7 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
         ValueError: If amount is outside LNURL limits or other validation errors.
         Exception: If LNURL fetch or invoice payment fails.
     """
+    print(f"Sending {amount_msat / 1000} sat to {lnurl}")
     callback_url, min_sendable, max_sendable = await get_lnurl_data(lnurl)
 
     if not (min_sendable <= amount_msat <= max_sendable):
@@ -250,6 +253,7 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
 
     print(f"{amount_paid} sats paid to lnurl", flush=True)
 
+    print(f"Amount paid: {amount_paid / 1000} sat")
     return amount_paid
 
 
