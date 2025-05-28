@@ -11,8 +11,9 @@ from .db import ApiKey, AsyncSession, get_session
 
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
 MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
-MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 10))
-DEVS_DONATION_RATE = 0 # 0.021  # 2.1%
+MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 100))
+DEV_LN_ADDRESS = "routstr@minibits.cash"
+DEVS_DONATION_RATE = 0.021  # 2.1%
 WALLET = None
 
 #TODO
@@ -74,11 +75,13 @@ async def _pay_invoice_with_cashu(
 ) -> int:
     """Pays a BOLT11 invoice using Cashu proofs via melt."""
 
+    amount_to_send_msat = amount_to_send_msat // 1000
     quote = await wallet.melt_quote(bolt11_invoice, amount_to_send_msat)
 
     proofs_to_melt, _ = await wallet.select_to_send(
         wallet.proofs, quote.amount + quote.fee_reserve
     )
+    print(f"Proofs to melt: {proofs_to_melt}")
 
     _ = await wallet.melt(
         proofs_to_melt, bolt11_invoice, quote.fee_reserve, quote.quote
@@ -87,45 +90,67 @@ async def _pay_invoice_with_cashu(
     return quote.amount
 
 
+async def pay_out_with_new_session() -> None:
+    """
+    Wrapper for pay_out that creates its own database session.
+    This prevents database connection conflicts when called as a background task.
+    """
+    from .db import create_session
+    
+    try:
+        async with create_session() as session:
+            await pay_out(session)
+    except Exception as e:
+        print(f"Error in pay_out_with_new_session: {e}")
+
+
 async def pay_out(session: AsyncSession) -> None:
     """
     Calculates the pay-out amount based on the spent balance, profit, and donation rate.
     """
-    balance = (
-        await session.exec(
-            select(func.sum(col(ApiKey.balance))).where(ApiKey.balance > 0)
-        )
-    ).one()
-    if balance is None:
-        raise ValueError("No balance to pay out.")
-    user_balance = balance // 1000 # conversion to sats
-    wallet = await _initialize_wallet()
-    wallet_balance = wallet.available_balance
+    try:
+        balance = (
+            await session.exec(
+                select(func.sum(col(ApiKey.balance))).where(ApiKey.balance > 0)
+            )
+        ).one()
+        if balance is None or balance == 0:
+            # No balance to pay out - this is OK, not an error
+            return
+        
+        user_balance_sats = balance // 1000  # Convert msats to sats
+        wallet = await _initialize_wallet()
+        wallet_balance_sats = wallet.available_balance  # Already in sats
 
-    print(f"Wallet-balance: {wallet_balance}, User-balance: {user_balance}, Revenue: {wallet_balance - user_balance}, MinPayout:{MINIMUM_PAYOUT}", flush=True)
-    assert wallet_balance >= user_balance, f"Something went deeply wrong. Wallet-balance: {wallet_balance}, User-Balance: {user_balance}"
-    if (revenue := wallet_balance - user_balance) <= MINIMUM_PAYOUT:
-        return
+        # Handle edge cases more gracefully
+        if wallet_balance_sats < user_balance_sats:
+            print(f"Warning: Wallet balance ({wallet_balance_sats} sats) is less than user balance ({user_balance_sats} sats). Skipping payout.")
+            return
 
-    devs_donation = int(revenue * DEVS_DONATION_RATE)
-    owners_draw = revenue - devs_donation
+        if (revenue := wallet_balance_sats - user_balance_sats) <= MINIMUM_PAYOUT:
+            # Not enough revenue yet - this is OK
+            return
 
+        devs_donation = int(revenue * DEVS_DONATION_RATE)
+        owners_draw = revenue - devs_donation
 
-    print(f"       DEBUG   Revenue > Minimum Payout: paying {owners_draw} sats to {RECEIVE_LN_ADDRESS}", flush=True)
-    await send_to_lnurl(wallet, RECEIVE_LN_ADDRESS, owners_draw * 1000) # conversion to msats for send_to_lnurl
-    
-    if devs_donation > 0:
+        # Send payouts
+        print(f"Sending {owners_draw} sats to {RECEIVE_LN_ADDRESS}")
+        await send_to_lnurl(wallet, RECEIVE_LN_ADDRESS, owners_draw * 1000)  # Convert to msats
+        print(f"Sending {devs_donation} sats to {DEV_LN_ADDRESS}")
         await send_to_lnurl(
             wallet,
-            "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s@npub.cash",
-            devs_donation * 1000,
+            DEV_LN_ADDRESS,
+            devs_donation * 1000,  # Convert to msats
         )
+
+    except Exception as e:
+        # Log the error but don't crash - payouts can be retried later
+        print(f"Error in pay_out: {e}")
 
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
     token_obj: Token = deserialize_token_from_string(cashu_token)
-    # Initialize the wallet with the mint specified in the token
-    print(f"Trying to credit token from mint: {token_obj.mint}", flush=True)
     wallet: Wallet = await _initialize_wallet(token_obj.mint)
     if token_obj.mint == MINT:
         # crediting a token created using the same mint as specified in .env
@@ -250,6 +275,7 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
         ValueError: If amount is outside LNURL limits or other validation errors.
         Exception: If LNURL fetch or invoice payment fails.
     """
+    print(f"Sending {amount_msat / 1000} sat to {lnurl}")
     callback_url, min_sendable, max_sendable = await get_lnurl_data(lnurl)
 
     if not (min_sendable <= amount_msat <= max_sendable):
@@ -259,11 +285,12 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
         )
     # subtract estimated fees
     # TODO: Is a static fee calculation working well? 
-    # moving the 2000 and 0.01 to optional enviroment variables gives more control to users
+    # moving the 2000 and 0.01 to optional enviroment variables might give more control to users
     amount_to_send = amount_msat - int(max(2000, amount_msat * 0.01))
 
     print(f"       DEBUG   Trying to pay {amount_to_send} msats to {lnurl}, with Wallet balance = {wallet.balance}", flush = True)
 
+    print(f"trying to pay {amount_to_send} msats to {lnurl}. Available balance: {wallet.balance}", flush=True)
     # Note: We pass amount_msat directly. The actual amount paid might be adjusted
     # slightly by the melt quote based on the invoice details.
     bolt11_invoice, _ = await _get_lnurl_invoice(callback_url, amount_to_send)
@@ -273,6 +300,7 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
 
     print(f"       DEBUG   {amount_paid} sats paid to lnurl", flush=True)
 
+    print(f"Amount paid: {amount_paid / 1000} sat")
     return amount_paid
 
 
@@ -292,7 +320,7 @@ async def get_lnurl_data(lnurl: str) -> tuple[str, int, int]:
     elif lnurl.lower().startswith("lnurl"):
         try:
             # Optional import for environments where bech32 might not be present initially
-            from bech32 import bech32_decode, convertbits
+            from bech32 import bech32_decode, convertbits  # type: ignore
 
             hrp, data = bech32_decode(lnurl)
             if data is None:
