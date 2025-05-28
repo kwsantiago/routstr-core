@@ -1,14 +1,12 @@
 import os
 from datetime import datetime, timezone
 
-
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 from .cashu import _initialize_wallet
 
 admin_router = APIRouter(prefix="/admin")
-
 
 def login_form() -> str:
     return """<!DOCTYPE html>
@@ -97,31 +95,22 @@ async def dashboard(request: Request) -> str:
 
     api_keys_table_rows = []
     for key in api_keys:
-        if key.key_expiry_time is not None: 
-            expiry_time_utc = datetime.fromtimestamp(key.key_expiry_time, tz=timezone.utc)
-            expiry_time_human_readable = expiry_time_utc.strftime('%Y-%m-%d %H:%M:%S')
-            api_keys_table_rows.append(
-                f"<tr><td>{key.hashed_key}</td><td>{key.balance}</td><td>{key.total_spent}</td><td>{key.total_requests}</td><td>{key.refund_address}</td><td>{key.key_expiry_time} ({expiry_time_human_readable} UTC)</td></tr>"
-            )
-        else: 
-            expiry_time_human_readable = ""
-            api_keys_table_rows.append(
-                f"<tr><td>{key.hashed_key}</td><td>{key.balance}</td><td>{key.total_spent}</td><td>{key.total_requests}</td><td>{key.refund_address}</td><td>{key.key_expiry_time}</td></tr>"
-            )
+        expiry_time_utc = datetime.fromtimestamp(key.key_expiry_time, tz=timezone.utc) if key.key_expiry_time is not None else None
+        expiry_time_human_readable = expiry_time_utc.strftime('%Y-%m-%d %H:%M:%S') if expiry_time_utc else ""
+
+        api_keys_table_rows.append(
+            f"<tr><td>{key.hashed_key}</td><td>{key.balance}</td><td>{key.total_spent}</td><td>{key.total_requests}</td><td>{key.refund_address}</td><td>{'{} ({} UTC)'.format(key.key_expiry_time, expiry_time_human_readable) if key.key_expiry_time else key.key_expiry_time}</td></tr>"
+        )
 
     api_keys_table_rows = "".join(api_keys_table_rows)
 
-
     # Calculate the total balance of all API keys
     total_user_balance = int(sum(key.balance / 1000 for key in api_keys))
-
     # Fetch balance from cashu
     wallet = await _initialize_wallet()
     wallet_balance = wallet.balance
-
     # calculate owner balance
     owner_balance = wallet_balance - total_user_balance
-
 
     return f"""<!DOCTYPE html>
     <html>

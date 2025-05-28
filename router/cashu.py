@@ -12,6 +12,7 @@ from .db import ApiKey, AsyncSession, get_session
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
 MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
 MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 100))
+REFUND_PROCESSING_INTERVAL = int(os.environ.get("REFUND_PROCESSING_INTERVAL", 3600))
 DEV_LN_ADDRESS = "routstr@minibits.cash"
 DEVS_DONATION_RATE = 0.021  # 2.1%
 WALLET = None
@@ -81,7 +82,9 @@ async def _pay_invoice_with_cashu(
     proofs_to_melt, _ = await wallet.select_to_send(
         wallet.proofs, quote.amount + quote.fee_reserve
     )
-    print(f"Proofs to melt: {proofs_to_melt}")
+    
+    # Debugging Cashu Proofs
+    #print(f"Proofs to melt: {proofs_to_melt}")
 
     _ = await wallet.melt(
         proofs_to_melt, bolt11_invoice, quote.fee_reserve, quote.quote
@@ -164,25 +167,35 @@ async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -
     else: 
         # crediting a token created using a different mint as specified in .env
         print("Received a token from a different mint", flush=True)
-        #TODO 
+        #TODO This fails, and needs to be fixed 
 
 
-# TODO i think the wallet.balance is not updated correctly after refunds
-# TODO what happens if minimum payout gets reached by a request that needs to be refunded
 async def check_for_refunds() -> None:
+    """
+    Periodically checks for API keys that are eligible for refunds and processes them.
+
+    Raises:
+        Exception: If an error occurs during the refund check process.
+    """
+
+    # Setting REFUND_PROCESSING_INTERVAL to 0 disables it
+    if REFUND_PROCESSING_INTERVAL == 0:
+        print("Automatic refund processing is disabled.")
+        return
+
     while True:
         try:
             async for session in get_session():
                 result = await session.exec(select(ApiKey))
                 keys = result.all()
-
+                current_time = int(time.time())
                 for key in keys:
-                    if(key.balance > 0 and key.refund_address and key.key_expiry_time and key.key_expiry_time < time.time()):
-                        print(f"       DEBUG   Refunding key {key.hashed_key[:3] + '[...]' + key.hashed_key[-3:]}, Current Time: {int(time.time())}, Expirary Time: {key.key_expiry_time}", flush = True)
+                    if(key.balance > 0 and key.refund_address and key.key_expiry_time and key.key_expiry_time < current_time):
+                        print(f"       DEBUG   Refunding key {key.hashed_key[:3] + '[...]' + key.hashed_key[-3:]}, Current Time: {current_time}, Expirary Time: {key.key_expiry_time}", flush = True)
                         await refund_balance(key.balance, key, session)
-                     #TODO Error balance to low
-            await asyncio.sleep(30)
-            #TODO Define time to sleep # hour: 3600
+                        
+            # Sleep for the specified interval before checking again
+            await asyncio.sleep(REFUND_PROCESSING_INTERVAL) 
         except Exception as e:
             print(f"Error during refund check: {e}")
         
@@ -290,7 +303,6 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
 
     print(f"       DEBUG   Trying to pay {amount_to_send} msats to {lnurl}, with Wallet balance = {wallet.balance}", flush = True)
 
-    print(f"trying to pay {amount_to_send} msats to {lnurl}. Available balance: {wallet.balance}", flush=True)
     # Note: We pass amount_msat directly. The actual amount paid might be adjusted
     # slightly by the melt quote based on the invoice details.
     bolt11_invoice, _ = await _get_lnurl_invoice(callback_url, amount_to_send)
@@ -300,7 +312,6 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
 
     print(f"       DEBUG   {amount_paid} sats paid to lnurl", flush=True)
 
-    print(f"Amount paid: {amount_paid / 1000} sat")
     return amount_paid
 
 

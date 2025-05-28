@@ -193,7 +193,6 @@ async def proxy(
                 background_tasks = BackgroundTasks()
                 background_tasks.add_task(response.aclose)
                 background_tasks.add_task(client.aclose)
-
                 return StreamingResponse(
                     stream_with_cost(),
                     status_code=response.status_code,
