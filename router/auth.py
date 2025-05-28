@@ -1,9 +1,11 @@
+import asyncio
 import hashlib
 import os
+import json
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
-from .cashu import credit_balance, pay_out
+from .cashu import credit_balance, pay_out_with_new_session
 from .db import ApiKey, AsyncSession
 from .models import MODELS
 
@@ -26,7 +28,16 @@ async def validate_bearer_key(bearer_key: str, session: AsyncSession) -> ApiKey:
     Otherwise checks if the hash of the key exists.
     """
     if not bearer_key:
-        raise HTTPException(status_code=401, detail="api-key or cashu-token required")
+        raise HTTPException(
+            status_code=401, 
+            detail={
+                "error": {
+                    "message": "API key or Cashu token required",
+                    "type": "invalid_request_error",
+                    "code": "missing_api_key"
+                }
+            }
+        )
 
     if bearer_key.startswith("sk-"):
         if exsisting_key := await session.get(ApiKey, bearer_key[3:]):
@@ -44,14 +55,69 @@ async def validate_bearer_key(bearer_key: str, session: AsyncSession) -> ApiKey:
         except Exception as e:
             print(f"Redemption failed: {e}")
             raise HTTPException(
-                status_code=401, detail=f"Invalid or expired cashu key: {e}"
+                status_code=401,
+                detail={
+                    "error": {
+                        "message": f"Invalid or expired Cashu key: {str(e)}",
+                        "type": "invalid_request_error",
+                        "code": "invalid_api_key"
+                    }
+                }
             )
-    raise HTTPException(status_code=401, detail="Invalid API key")
+    raise HTTPException(
+        status_code=401,
+        detail={
+            "error": {
+                "message": "Invalid API key",
+                "type": "invalid_request_error",
+                "code": "invalid_api_key"
+            }
+        }
+    )
 
 
-async def pay_for_request(key: ApiKey, session: AsyncSession) -> None:
+async def pay_for_request(key: ApiKey, session: AsyncSession, request: Request | None, request_body: bytes | None = None) -> None:
+    if MODEL_BASED_PRICING and os.path.exists("models.json"):
+        if request_body:
+            body = json.loads(request_body)
+        else:
+            body = await request.json()
+        if request_model := body.get("model"):
+            if request_model not in [model.id for model in MODELS]:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": {
+                            "message": f"Invalid model: {request_model}",
+                            "type": "invalid_request_error",
+                            "code": "model_not_found"
+                        }
+                    }
+                )
+            model = next(model for model in MODELS if model.id == request_model)
+            if key.balance < model.sats_pricing.max_cost * 1000:
+                raise HTTPException(
+                    status_code=413,
+                    detail={
+                        "error": {
+                            "message": f"This model requires a minimum balance of {model.sats_pricing.max_cost} sats",
+                            "type": "insufficient_quota",
+                            "code": "insufficient_balance"
+                        }
+                    }
+                )
+
     if key.balance < COST_PER_REQUEST:
-        raise HTTPException(status_code=402, detail=f"Insufficient balance: {COST_PER_REQUEST} mSats required. {key.balance} available.")
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": {
+                    "message": f"Insufficient balance: {COST_PER_REQUEST} mSats required. {key.balance} available.",
+                    "type": "insufficient_quota",
+                    "code": "insufficient_balance"
+                }
+            }
+        )
 
     # Charge the base cost for the request
     key.balance -= COST_PER_REQUEST
@@ -77,19 +143,47 @@ async def adjust_payment_for_tokens(
         "total_msats": COST_PER_REQUEST,
     }
 
+    # Check if we have usage data
+    if "usage" not in response_data or response_data["usage"] is None:
+        print("No usage data in response, using base cost only")
+        return cost_data
+
+    # Default to configured pricing
+    MSATS_PER_1K_INPUT_TOKENS = COST_PER_1K_INPUT_TOKENS
+    MSATS_PER_1K_OUTPUT_TOKENS = COST_PER_1K_OUTPUT_TOKENS
+
     if MODEL_BASED_PRICING and os.path.exists("models.json"):
         response_model = response_data.get("model", "")
         if response_model not in [model.id for model in MODELS]:
-            raise HTTPException(status_code=400, detail="Invalid model")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": {
+                        "message": f"Invalid model in response: {response_model}",
+                        "type": "invalid_request_error",
+                        "code": "model_not_found"
+                    }
+                }
+            )
         model = next(model for model in MODELS if model.id == response_model)
         if model.sats_pricing is None:
-            raise HTTPException(status_code=400, detail="Model pricing not defined")
-        # TODO: Rename,  This is named very close to COST_PER_1K_OUTPUT_TOKENS
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": {
+                        "message": "Model pricing not defined",
+                        "type": "invalid_request_error",
+                        "code": "pricing_not_found"
+                    }
+                }
+            )
+
         MSATS_PER_1K_INPUT_TOKENS = model.sats_pricing.prompt * 1_000_000
         MSATS_PER_1K_OUTPUT_TOKENS = model.sats_pricing.completion * 1_000_000
 
     if not (MSATS_PER_1K_OUTPUT_TOKENS and MSATS_PER_1K_INPUT_TOKENS):
-        raise HTTPException(status_code=400, detail="Model pricing not defined")
+        # If no token pricing is configured, just return base cost
+        return cost_data
 
     input_tokens = response_data.get("usage", {}).get("prompt_tokens", 0)
     output_tokens = response_data.get("usage", {}).get("completion_tokens", 0)
@@ -117,6 +211,9 @@ async def adjust_payment_for_tokens(
                 f"Warning: Insufficient balance for token-based pricing adjustment: {key.hashed_key[:10]}..."
             )
             # Still proceed but log the issue - we already provided the service
+            # Add information about insufficient balance to cost data
+            cost_data["warning"] = "Insufficient balance for full token-based pricing"
+            cost_data["balance_shortage_msats"] = cost_difference - key.balance
         else:
             key.balance -= cost_difference
             key.total_spent += cost_difference
@@ -131,6 +228,6 @@ async def adjust_payment_for_tokens(
     session.add(key)
     await session.commit()
 
-    await pay_out(session)
+    asyncio.create_task(pay_out_with_new_session())
 
     return cost_data

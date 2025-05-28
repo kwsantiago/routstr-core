@@ -3,9 +3,9 @@ __pycache__
 keys.db
 wallet.sqlite3
 
-
 # Development 
 .notes
 .keys.db
 .wallet.sqlite3
 .models.json
+compose.override.yml
