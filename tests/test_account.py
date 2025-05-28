@@ -188,7 +188,6 @@ async def test_account_with_cashu_token(
 ):
     """Test authentication with a cashu token creates a new account."""
     cashu_token = "cashuBqQSEQ123456"
-    hashed = hash_api_key(cashu_token)
     
     with patch("router.cashu.credit_balance", new_callable=AsyncMock) as mock_credit:
         # Mock successful token redemption

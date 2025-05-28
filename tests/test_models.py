@@ -67,14 +67,21 @@ async def test_update_sats_pricing_calculation(sample_model: Model):
                 assert sample_model.sats_pricing is not None
                 
                 # Verify calculations (prices in USD / sats_to_usd)
-                assert sample_model.sats_pricing.prompt == 0.01 / 0.0001  # 100 sats
-                assert sample_model.sats_pricing.completion == 0.02 / 0.0001  # 200 sats
-                assert sample_model.sats_pricing.request == 0.001 / 0.0001  # 10 sats
+                assert sample_model.sats_pricing.prompt == pytest.approx(0.01 / 0.0001)  # 100 sats
+                assert sample_model.sats_pricing.completion == pytest.approx(0.02 / 0.0001)  # 200 sats
+                assert sample_model.sats_pricing.request == pytest.approx(0.001 / 0.0001)  # 10 sats
                 
                 # Verify max_cost calculation for model with top_provider
                 expected_max_context = 4096 * sample_model.sats_pricing.prompt
                 expected_max_completion = 2048 * sample_model.sats_pricing.completion
-                assert sample_model.sats_pricing.max_cost == expected_max_context + expected_max_completion
+                assert sample_model.sats_pricing.max_cost == pytest.approx(expected_max_context + expected_max_completion)
+                
+                # Cancel and await the task
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
                 
             except asyncio.CancelledError:
                 pass
@@ -140,7 +147,14 @@ async def test_update_sats_pricing_without_top_provider():
                 ir = model_without_top.sats_pricing.internal_reasoning * 100
                 expected_max = p + c + r + i + w + ir
                 
-                assert model_without_top.sats_pricing.max_cost == expected_max
+                assert model_without_top.sats_pricing.max_cost == pytest.approx(expected_max)
+                
+                # Cancel and await the task
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
                 
             except asyncio.CancelledError:
                 pass
@@ -158,11 +172,11 @@ async def test_update_sats_pricing_handles_errors():
         error_printed = False
         original_print = print
         
-        def mock_print(msg):
+        def mock_print(*args, **kwargs):
             nonlocal error_printed
-            if isinstance(msg, Exception) and str(msg) == "API Error":
+            if args and isinstance(args[0], Exception) and str(args[0]) == "API Error":
                 error_printed = True
-            original_print(msg)
+            original_print(*args, **kwargs)
         
         with patch("builtins.print", side_effect=mock_print):
             sleep_called = asyncio.Event()
@@ -178,6 +192,13 @@ async def test_update_sats_pricing_handles_errors():
                     
                     # Verify error was printed
                     assert error_printed
+                    
+                    # Cancel and await the task
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
                     
                 except asyncio.CancelledError:
                     pass
@@ -197,4 +218,4 @@ def test_model_serialization(sample_model: Model):
     # Test deserialization
     new_model = Model(**model_dict)
     assert new_model.id == sample_model.id
-    assert new_model.pricing.prompt == sample_model.pricing.prompt 
+    assert new_model.pricing.prompt == pytest.approx(sample_model.pricing.prompt) 

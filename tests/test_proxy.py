@@ -113,6 +113,10 @@ async def test_proxy_successful_request_mock(
         mock_client = AsyncMock()
         mock_client_class.return_value = mock_client
         
+        # Add async context manager methods
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        
         # Create a mock response
         mock_response = AsyncMock()
         mock_response.status_code = 200
@@ -175,10 +179,14 @@ async def test_proxy_streaming_response(
         mock_client = AsyncMock()
         mock_client_class.return_value = mock_client
         
+        # Add async context manager methods
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        
         mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "text/event-stream"}
-        mock_response.aiter_bytes = mock_aiter_bytes
+        mock_response.aiter_bytes = lambda: mock_aiter_bytes()
         mock_response.aclose = AsyncMock()
         
         mock_client.send = AsyncMock(return_value=mock_response)
@@ -212,6 +220,10 @@ async def test_proxy_handles_upstream_errors(
     with patch("httpx.AsyncClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client_class.return_value = mock_client
+        
+        # Add async context manager methods
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
         
         # Simulate connection error
         mock_client.send.side_effect = Exception("Connection refused")
@@ -252,7 +264,8 @@ async def test_proxy_with_model_based_pricing(
     test_session.add(key)
     await test_session.commit()
     
-    with patch.dict(os.environ, {"MODEL_BASED_PRICING": "true"}):
+    # Patch the MODEL_BASED_PRICING constant directly
+    with patch("router.auth.MODEL_BASED_PRICING", True):
         with patch("os.path.exists", return_value=True):
             # Mock a model with pricing
             from router.models import MODELS, Model, Pricing, Architecture, TopProvider
@@ -303,6 +316,10 @@ async def test_proxy_with_model_based_pricing(
             with patch("httpx.AsyncClient") as mock_client_class:
                 mock_client = AsyncMock()
                 mock_client_class.return_value = mock_client
+                
+                # Add async context manager methods
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock()
                 
                 # Create a mock response
                 mock_response = AsyncMock()
