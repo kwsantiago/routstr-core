@@ -8,25 +8,29 @@ from sqlmodel import select, func, col
 from .db import ApiKey, AsyncSession
 
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
-DEV_LN_ADDRESS = "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s@npub.cash"
-MINIMUM_PAYOUT = 100  # sat
+MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
+MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 100))
+DEV_LN_ADDRESS = "routstr@minibits.cash"
 DEVS_DONATION_RATE = 0.021  # 2.1%
 WALLET = None
 
-
+#TODO
+# This causes problems when users send tokens from other mints
+# WALLET is already set so it returns the specified wallet, but this wallet does not know the keyset of the token 
 async def _initialize_wallet(mint_url: str | None = None) -> Wallet:
     """Initializes and loads a Cashu wallet."""
     global WALLET
     if WALLET is not None:
         return WALLET
     if mint_url is None:
-        mint_url = "https://mint.minibits.cash/Bitcoin"
+        mint_url = MINT
     wallet = await Wallet.with_db(
         mint_url,
         db=".",
         load_all_keysets=True,
         unit="sat",  # todo change to msat
     )
+    print(f"initialized cashu wallet at mint {mint_url}", flush=True)
     await wallet.load_mint_info()
     await wallet.load_mint_keysets()
     if not hasattr(wallet, "keyset_id") or wallet.keyset_id is None:
@@ -135,6 +139,7 @@ async def pay_out(session: AsyncSession) -> None:
             DEV_LN_ADDRESS,
             devs_donation * 1000,  # Convert to msats
         )
+
     except Exception as e:
         # Log the error but don't crash - payouts can be retried later
         print(f"Error in pay_out: {e}")
@@ -161,11 +166,11 @@ async def refund_balance(amount: int, key: ApiKey, session: AsyncSession) -> int
     await session.commit()
     if key.refund_address is None:
         raise ValueError("Refund address not set.")
-    return await send_to_lnurl(wallet, key.refund_address, amount)
+    return await send_to_lnurl(wallet, key.refund_address, amount_msat=amount) #Todo: Check possible msats / sats conversion error?
 
 
 async def create_token(
-    amount_msats: int, mint: str = "https://mint.minibits.cash/Bitcoin"
+    amount_msats: int, mint: str = MINT
 ) -> str:
     wallet = await _initialize_wallet(mint)
     balance = wallet.available_balance
@@ -234,11 +239,16 @@ async def send_to_lnurl(wallet: Wallet, lnurl: str, amount_msat: int) -> int:
     # subtract estimated fees
     amount_to_send = amount_msat - int(max(2000, amount_msat * 0.01))
 
+
+    print(f"trying to pay {amount_to_send} msats to {lnurl}. Available balance: {wallet.balance}", flush=True)
     # Note: We pass amount_msat directly. The actual amount paid might be adjusted
     # slightly by the melt quote based on the invoice details.
     bolt11_invoice, _ = await _get_lnurl_invoice(callback_url, amount_to_send)
 
-    amount_paid = await _pay_invoice_with_cashu(wallet, bolt11_invoice, amount_to_send)
+    # Conversion to Sats (/ 1000 necessary for cashu payments)
+    amount_paid = await _pay_invoice_with_cashu(wallet, bolt11_invoice, amount_to_send / 1000)
+
+    print(f"{amount_paid} sats paid to lnurl", flush=True)
 
     return amount_paid
 

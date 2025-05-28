@@ -2,4 +2,10 @@ __pycache__
 .env
 keys.db
 wallet.sqlite3
+
+# Development 
+.notes
+.keys.db
+.wallet.sqlite3
+.models.json
 compose.override.yml

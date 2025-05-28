@@ -49,7 +49,7 @@ async def validate_bearer_key(bearer_key: str, session: AsyncSession) -> ApiKey:
             if exsisting_key := await session.get(ApiKey, hashed_key):
                 return exsisting_key
             new_key = ApiKey(hashed_key=hashed_key, balance=0)
-            await credit_balance(bearer_key, new_key, session)
+            await credit_balance(bearer_key, new_key, session) #TODO: see cashu.py "_initialize_wallet"
             await session.refresh(new_key)
             return new_key
         except Exception as e:
@@ -112,7 +112,7 @@ async def pay_for_request(key: ApiKey, session: AsyncSession, request: Request |
             status_code=402,
             detail={
                 "error": {
-                    "message": "Insufficient balance",
+                    "message": f"Insufficient balance: {COST_PER_REQUEST} mSats required. {key.balance} available.",
                     "type": "insufficient_quota",
                     "code": "insufficient_balance"
                 }
