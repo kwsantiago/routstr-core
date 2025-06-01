@@ -8,4 +8,5 @@ wallet.sqlite3
 .*keys.db
 .*wallet.sqlite3
 .*models.json
+
 compose.override.yml
