@@ -1,4 +1,3 @@
-import asyncio
 import os
 import json
 from fastapi import APIRouter, Request, BackgroundTasks, Depends
@@ -6,7 +5,7 @@ from fastapi.responses import Response, StreamingResponse
 import httpx
 import re
 
-from router.cashu import pay_out_with_new_session
+from .cashu import pay_out
 
 from .auth import validate_bearer_key, pay_for_request, adjust_payment_for_tokens
 from .db import AsyncSession, get_session
@@ -27,7 +26,7 @@ async def proxy(
     bearer_key = auth.replace("Bearer ", "") if auth.startswith("Bearer ") else ""
 
     key = await validate_bearer_key(bearer_key, session)
-    
+
     # Pre-validate JSON for requests that require it
     request_body = None
     if request.method in ["POST", "PUT", "PATCH"] and path.endswith("chat/completions"):
@@ -38,29 +37,33 @@ async def proxy(
                 json.loads(request_body)
         except json.JSONDecodeError as e:
             return Response(
-                content=json.dumps({
-                    "error": {
-                        "message": f"Invalid JSON in request body: {str(e)}",
-                        "type": "invalid_request_error",
-                        "code": "invalid_json"
+                content=json.dumps(
+                    {
+                        "error": {
+                            "message": f"Invalid JSON in request body: {str(e)}",
+                            "type": "invalid_request_error",
+                            "code": "invalid_json",
+                        }
                     }
-                }),
+                ),
                 status_code=400,
-                media_type="application/json"
+                media_type="application/json",
             )
-        except Exception as e:
+        except Exception:
             return Response(
-                content=json.dumps({
-                    "error": {
-                        "message": "Error reading request body",
-                        "type": "invalid_request_error",
-                        "code": "request_error"
+                content=json.dumps(
+                    {
+                        "error": {
+                            "message": "Error reading request body",
+                            "type": "invalid_request_error",
+                            "code": "request_error",
+                        }
                     }
-                }),
+                ),
                 status_code=400,
-                media_type="application/json"
+                media_type="application/json",
             )
-    
+
     await pay_for_request(key, session, request, request_body)
 
     # Prepare headers, removing sensitive/problematic ones
@@ -81,7 +84,7 @@ async def proxy(
     url = f"{UPSTREAM_BASE_URL}/{path}"
     client = httpx.AsyncClient(
         transport=httpx.AsyncHTTPTransport(retries=1),
-        timeout=None  # No timeout - requests can take as long as needed
+        timeout=None,  # No timeout - requests can take as long as needed
     )
 
     try:
@@ -165,7 +168,7 @@ async def proxy(
                                         break
                                 except json.JSONDecodeError:
                                     continue
-                            
+
                         except Exception as e:
                             print(f"Error processing streaming response for cost: {e}")
 
@@ -207,7 +210,7 @@ async def proxy(
         background_tasks = BackgroundTasks()
         background_tasks.add_task(response.aclose)
         background_tasks.add_task(client.aclose)
-        background_tasks.add_task(pay_out_with_new_session)
+        background_tasks.add_task(pay_out)
 
         return StreamingResponse(
             response.aiter_bytes(),
@@ -225,7 +228,7 @@ async def proxy(
             f"Request details: method={request.method}, url={url}, headers={headers}, "
             f"path={path}, query_params={dict(request.query_params)}"
         )
-        
+
         # Provide more specific error messages based on the error type
         if isinstance(exc, httpx.ConnectError):
             error_message = "Unable to connect to upstream service"
@@ -235,21 +238,24 @@ async def proxy(
             error_message = "Network error while connecting to upstream service"
         else:
             error_message = f"Error connecting to upstream service: {error_type}"
-            
+
         return Response(
-            content=json.dumps({
-                "error": {
-                    "message": error_message,
-                    "type": "upstream_error",
-                    "code": 502
+            content=json.dumps(
+                {
+                    "error": {
+                        "message": error_message,
+                        "type": "upstream_error",
+                        "code": 502,
+                    }
                 }
-            }),
+            ),
             status_code=502,
-            media_type="application/json"
+            media_type="application/json",
         )
     except Exception as exc:
         await client.aclose()
         import traceback
+
         tb = traceback.format_exc()
         print(
             f"Unexpected error: {exc}\n"
@@ -258,13 +264,15 @@ async def proxy(
             f"Traceback:\n{tb}"
         )
         return Response(
-            content=json.dumps({
-                "error": {
-                    "message": "An unexpected server error occurred",
-                    "type": "internal_error",
-                    "code": 500
+            content=json.dumps(
+                {
+                    "error": {
+                        "message": "An unexpected server error occurred",
+                        "type": "internal_error",
+                        "code": 500,
+                    }
                 }
-            }),
+            ),
             status_code=500,
-            media_type="application/json"
+            media_type="application/json",
         )

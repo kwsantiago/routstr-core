@@ -1,8 +1,9 @@
 from typing import Annotated
 from fastapi import APIRouter, Header, HTTPException, Depends
+from sixty_nuts import Wallet
 
 from .auth import validate_bearer_key
-from .cashu import refund_balance, credit_balance, create_token
+from .cashu import refund_balance, credit_balance, NSEC, MINT
 from .db import ApiKey, AsyncSession, get_session
 
 account_router = APIRouter(prefix="/v1/wallet")
@@ -51,5 +52,6 @@ async def refund_balance_endpoint(
         await refund_balance(remaining_balance, key, session)
         return {"recipient": key.refund_address, "msats": remaining_balance}
     else:
-        token = await create_token(remaining_balance)
-        return {"msats": remaining_balance, "recipient": None, "token": token}
+        async with Wallet(nsec=NSEC, mint_urls=[MINT]) as wallet:
+            token = await wallet.send(remaining_balance)
+            return {"msats": remaining_balance, "recipient": None, "token": token}

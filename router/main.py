@@ -7,7 +7,6 @@ from .db import init_db
 from .admin import admin_router
 from .proxy import proxy_router
 from .account import account_router
-from .cashu import _initialize_wallet
 from .models import MODELS, update_sats_pricing
 from .discovery import providers_router
 
@@ -53,5 +52,4 @@ app.include_router(proxy_router)
 @app.on_event("startup")
 async def startup_event():
     await init_db()
-    await _initialize_wallet()
     asyncio.create_task(update_sats_pricing())

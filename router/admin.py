@@ -1,7 +1,12 @@
 import os
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
-from .cashu import _initialize_wallet
+from sixty_nuts import Wallet
+from sqlmodel import select
+
+from .db import ApiKey, create_session
+from .cashu import NSEC, MINT
 
 admin_router = APIRouter(prefix="/admin")
 
@@ -74,6 +79,7 @@ def info(content: str) -> str:
     </html>
     """
 
+
 def admin_auth() -> str:
     if os.getenv("ADMIN_PASSWORD", "") == "":
         return info("Please set a secure ADMIN_PASSWORD= in your ENV variables.")
@@ -81,11 +87,7 @@ def admin_auth() -> str:
         return login_form()
 
 
-from sqlmodel import select
-from .db import ApiKey, create_session
-
 async def dashboard(request: Request) -> str:
-
     # fetch cashu / api-key data from database
     async with create_session() as session:
         result = await session.exec(select(ApiKey))
@@ -96,9 +98,8 @@ async def dashboard(request: Request) -> str:
     )
 
     # Fetch balance from cashu
-    wallet = await _initialize_wallet()
-    current_balance = wallet.balance  # Not awaited, assuming it's a property
-
+    async with Wallet(nsec=NSEC, mint_urls=[MINT]) as wallet:
+        current_balance = (await wallet.fetch_wallet_state()).balance
 
     return f"""<!DOCTYPE html>
     <html>
@@ -134,10 +135,10 @@ async def dashboard(request: Request) -> str:
     </html>
     """
 
+
 @admin_router.get("/", response_class=HTMLResponse)
 async def admin(request: Request):
     admin_cookie = request.cookies.get("admin_password")
     if admin_cookie and admin_cookie == os.getenv("ADMIN_PASSWORD"):
         return await dashboard(request)
     return admin_auth()
-
