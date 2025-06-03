@@ -119,7 +119,7 @@ def test_client() -> TestClient:
 
             with patch("router.models.update_sats_pricing") as mock_update:
                 mock_update.return_value = None
-                return TestClient(app)
+                yield TestClient(app)
 
 
 @pytest_asyncio.fixture

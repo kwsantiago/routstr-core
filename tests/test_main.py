@@ -7,20 +7,16 @@ from unittest.mock import patch
 async def test_root_endpoint(async_client: AsyncClient):
     """Test the root endpoint returns expected information."""
     # Mock the environment variables for this specific test
-    with patch("os.environ.get") as mock_env_get:
-        def env_side_effect(key, default=None):
-            env_map = {
-                "NAME": "TestRoutstrNode",
-                "DESCRIPTION": "Test Node",
-                "NPUB": "npub1test",
-                "MINT": "https://test.mint.com",
-                "HTTP_URL": "http://test.example.com",
-                "ONION_URL": "http://test.onion",
-            }
-            return env_map.get(key, default)
-        
-        mock_env_get.side_effect = env_side_effect
-        
+    env_vars = {
+        "NAME": "TestRoutstrNode",
+        "DESCRIPTION": "Test Node",
+        "NPUB": "npub1test",
+        "MINT": "https://test.mint.com",
+        "HTTP_URL": "http://test.example.com",
+        "ONION_URL": "http://test.onion",
+    }
+    
+    with patch.dict("os.environ", env_vars, clear=False):
         response = await async_client.get("/")
         
         assert response.status_code == 200

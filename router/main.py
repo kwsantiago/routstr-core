@@ -8,7 +8,9 @@ from .admin import admin_router
 from .proxy import proxy_router
 from .account import account_router
 from .models import MODELS, update_sats_pricing
+from .cashu import check_for_refunds
 from .discovery import providers_router
+
 
 __version__ = "0.0.1"
 
@@ -53,3 +55,4 @@ app.include_router(proxy_router)
 async def startup_event():
     await init_db()
     asyncio.create_task(update_sats_pricing())
+    asyncio.create_task(check_for_refunds())

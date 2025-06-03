@@ -181,7 +181,7 @@ async def test_proxy_streaming_response(
         mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "text/event-stream"}
-        mock_response.aiter_bytes = mock_aiter_bytes
+        mock_response.aiter_bytes = lambda: mock_aiter_bytes()
         mock_response.aclose = AsyncMock()
 
         mock_client.send = AsyncMock(return_value=mock_response)

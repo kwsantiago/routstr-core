@@ -1,15 +1,20 @@
 import os
+import httpx
+import asyncio
+import time
 
 from sixty_nuts import Wallet
 from sqlmodel import select, func, col
+from .db import ApiKey, AsyncSession, get_session
 
 from .db import ApiKey, AsyncSession
 
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
 MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
 MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 100))
+REFUND_PROCESSING_INTERVAL = int(os.environ.get("REFUND_PROCESSING_INTERVAL", 3600))
 DEV_LN_ADDRESS = "routstr@minibits.cash"
-DEVS_DONATION_RATE = 0.021  # 2.1%
+DEVS_DONATION_RATE = float(os.environ.get("DEVS_DONATION_RATE", 0.021))  # 2.1%
 NSEC = os.environ["NSEC"]  # Nostr private key for the wallet
 
 
@@ -69,6 +74,44 @@ async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -
         session.add(key)
         await session.commit()
         return amount
+
+
+async def check_for_refunds() -> None:
+    """
+    Periodically checks for API keys that are eligible for refunds and processes them.
+
+    Raises:
+        Exception: If an error occurs during the refund check process.
+    """
+    raise Exception("TODO migrate to sixty-nuts")
+    # Setting REFUND_PROCESSING_INTERVAL to 0 disables it
+    if REFUND_PROCESSING_INTERVAL == 0:
+        print("Automatic refund processing is disabled.")
+        return
+
+    while True:
+        try:
+            async for session in get_session():
+                result = await session.exec(select(ApiKey))
+                keys = result.all()
+                current_time = int(time.time())
+                for key in keys:
+                    if (
+                        key.balance > 0
+                        and key.refund_address
+                        and key.key_expiry_time
+                        and key.key_expiry_time < current_time
+                    ):
+                        print(
+                            f"       DEBUG   Refunding key {key.hashed_key[:3] + '[...]' + key.hashed_key[-3:]}, Current Time: {current_time}, Expirary Time: {key.key_expiry_time}",
+                            flush=True,
+                        )
+                        await refund_balance(key.balance, key, session)
+
+            # Sleep for the specified interval before checking again
+            await asyncio.sleep(REFUND_PROCESSING_INTERVAL)
+        except Exception as e:
+            print(f"Error during refund check: {e}")
 
 
 async def refund_balance(amount: int, key: ApiKey, session: AsyncSession) -> int:
