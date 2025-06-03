@@ -14,7 +14,7 @@ MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
 MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 100))
 REFUND_PROCESSING_INTERVAL = int(os.environ.get("REFUND_PROCESSING_INTERVAL", 3600))
 DEV_LN_ADDRESS = "routstr@minibits.cash"
-DEVS_DONATION_RATE = 0.021  # 2.1%
+DEVS_DONATION_RATE = float(os.environ.get("DEVS_DONATION_RATE", 0.021))  # 2.1%
 WALLET = None
 
 #TODO
