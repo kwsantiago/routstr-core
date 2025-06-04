@@ -109,8 +109,6 @@ async def dashboard(request: Request) -> str:
             f"<tr><td>{key.hashed_key}</td><td>{key.balance}</td><td>{key.total_spent}</td><td>{key.total_requests}</td><td>{key.refund_address}</td><td>{'{} ({} UTC)'.format(key.key_expiry_time, expiry_time_human_readable) if key.key_expiry_time else key.key_expiry_time}</td></tr>"
         )
 
-    api_keys_table_rows = "".join(api_keys_table_rows)
-
     # Calculate the total balance of all API keys
     total_user_balance = int(sum(key.balance / 1000 for key in api_keys))
     # Fetch balance from cashu
@@ -150,7 +148,7 @@ async def dashboard(request: Request) -> str:
                     <th>Refund Address</th>
                     <th>Refund Time</th>
                 </tr>
-                {api_keys_table_rows}
+                {"".join(api_keys_table_rows)}
             </table>
         </body>
     </html>
