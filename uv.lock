@@ -797,6 +797,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "aiosqlite" },
     { name = "fastapi", extra = ["standard"] },
+    { name = "greenlet" },
     { name = "httpx", extra = ["socks"] },
     { name = "sixty-nuts" },
     { name = "sqlmodel" },
@@ -816,6 +817,7 @@ dev = [
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.20" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115" },
+    { name = "greenlet", specifier = ">=3.2.1" },
     { name = "httpx", extras = ["socks"], specifier = ">=0.25.2" },
     { name = "sixty-nuts", specifier = ">=0.0.2" },
     { name = "sqlmodel", specifier = ">=0.0.24" },
