@@ -48,20 +48,20 @@ async def validate_bearer_key(
 
     if bearer_key.startswith("sk-"):
         if existing_key := await session.get(ApiKey, bearer_key[3:]):
-            existing_key.key_expiry_time, existing_key.refund_address = (
-                key_expiry_time,
-                refund_address,
-            )
+            if key_expiry_time is not None:
+                existing_key.key_expiry_time = key_expiry_time
+            if refund_address is not None:
+                existing_key.refund_address = refund_address
             return existing_key
 
     if bearer_key.startswith("cashu"):
         try:
             hashed_key = hashlib.sha256(bearer_key.encode()).hexdigest()
             if existing_key := await session.get(ApiKey, hashed_key):
-                existing_key.key_expiry_time, existing_key.refund_address = (
-                    key_expiry_time,
-                    refund_address,
-                )
+                if key_expiry_time is not None:
+                    existing_key.key_expiry_time = key_expiry_time
+                if refund_address is not None:
+                    existing_key.refund_address = refund_address
                 return existing_key
 
             new_key = ApiKey(
