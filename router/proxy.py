@@ -17,7 +17,7 @@ proxy_router = APIRouter()
 
 
 @proxy_router.api_route(
-    "/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"]
+    "/{path:path}", methods=["GET", "POST"]
 )
 async def proxy(
     request: Request, path: str, session: AsyncSession = Depends(get_session)
