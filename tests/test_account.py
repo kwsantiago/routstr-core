@@ -116,16 +116,9 @@ async def test_refund_balance_without_address(
     test_session.add(key)
     await test_session.commit()
 
-    # Mock the Wallet class at the router.account module level
-    with patch("router.account.Wallet") as mock_wallet_class:
-        # Create a mock wallet instance
-        mock_wallet = AsyncMock()
-        mock_wallet.__aenter__ = AsyncMock(return_value=mock_wallet)
-        mock_wallet.__aexit__ = AsyncMock(return_value=None)
+    # Mock the WALLET instance at the router.account module level
+    with patch("router.account.WALLET") as mock_wallet:
         mock_wallet.send = AsyncMock(return_value="cashuBqQSEQ...")
-
-        # Make the Wallet class return our mock when instantiated
-        mock_wallet_class.return_value = mock_wallet
 
         response = await async_client.post(
             "/v1/wallet/refund", headers={"Authorization": f"Bearer sk-{api_key}"}
@@ -138,8 +131,8 @@ async def test_refund_balance_without_address(
         assert data["msats"] == 500000
         assert data["token"] == "cashuBqQSEQ..."
 
-        # Verify wallet.send was called with the correct amount
-        mock_wallet.send.assert_called_once_with(500000)
+        # Verify wallet.send was called with the correct amount (msats converted to sats)
+        mock_wallet.send.assert_called_once_with(500)
 
 
 @pytest.mark.asyncio

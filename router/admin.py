@@ -3,11 +3,10 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
-from sixty_nuts import Wallet
 from sqlmodel import select
 
 from .db import ApiKey, create_session
-from .cashu import NSEC, MINT
+from .cashu import WALLET
 
 admin_router = APIRouter(prefix="/admin")
 
@@ -112,9 +111,8 @@ async def dashboard(request: Request) -> str:
     # Calculate the total balance of all API keys
     total_user_balance = int(sum(key.balance / 1000 for key in api_keys))
     # Fetch balance from cashu
-    async with Wallet(nsec=NSEC, mint_urls=[MINT]) as wallet:
-        current_balance = (await wallet.fetch_wallet_state()).balance
-        owner_balance = current_balance - total_user_balance
+    current_balance = (await WALLET.fetch_wallet_state()).balance
+    owner_balance = current_balance - total_user_balance
 
     return f"""<!DOCTYPE html>
     <html>
