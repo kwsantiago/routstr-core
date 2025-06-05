@@ -2,7 +2,7 @@ import asyncio
 import os
 import pytest
 import pytest_asyncio
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Generator
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 from sqlmodel import SQLModel
@@ -94,7 +94,7 @@ async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest.fixture
-def test_client() -> TestClient:
+def test_client() -> Generator[TestClient, None, None]:
     """Create a test client for the FastAPI app."""
     with patch.dict(os.environ, TEST_ENV, clear=True):
         with patch("sixty_nuts.Wallet") as mock_wallet_class:

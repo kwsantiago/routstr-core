@@ -125,7 +125,7 @@ async def fetch_onion(provider: str) -> dict:
 
         # Configure httpx to use Tor SOCKS5 proxy
         async with httpx.AsyncClient(
-            proxies={"http://": tor_proxy, "https://": tor_proxy},
+            proxies={"http://": tor_proxy, "https://": tor_proxy},  # type: ignore
             timeout=httpx.Timeout(30.0),
             follow_redirects=True,
         ) as client:
