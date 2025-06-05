@@ -2,7 +2,7 @@ import pytest
 import pytest_asyncio
 import hashlib
 import uuid
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 from httpx import AsyncClient
 from router.db import ApiKey, AsyncSession
 
@@ -184,7 +184,6 @@ async def test_account_with_cashu_token(
 ):
     """Test authentication with a cashu token creates a new account."""
     cashu_token = "cashuBqQSEQ123456"
-    hashed = hash_api_key(cashu_token)
 
     async def mock_credit_balance(
         token: str, key: ApiKey, session: AsyncSession
@@ -200,7 +199,7 @@ async def test_account_with_cashu_token(
         "router.cashu.credit_balance",
         new_callable=AsyncMock,
         side_effect=mock_credit_balance,
-    ) as mock_credit:
+    ):
         response = await async_client.get(
             "/v1/wallet/", headers={"Authorization": f"Bearer {cashu_token}"}
         )

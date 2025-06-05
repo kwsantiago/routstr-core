@@ -49,7 +49,7 @@ async def query_nostr_relay_with_search(
                 "limit": limit,
                 "#p": [npub],  # Posts that tag this pubkey
             }
-        except:
+        except Exception:
             # If conversion fails, try regular search
             filter_obj = {
                 "kinds": kinds,

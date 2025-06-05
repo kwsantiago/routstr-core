@@ -4,7 +4,7 @@ import json
 import os
 import uuid
 from unittest.mock import AsyncMock, patch
-from httpx import AsyncClient, Response as HttpxResponse
+from httpx import AsyncClient
 from router.db import ApiKey, AsyncSession
 
 

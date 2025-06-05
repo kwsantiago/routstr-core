@@ -57,7 +57,6 @@ with patch("sixty_nuts.Wallet") as mock_wallet_class:
 
     from router.main import app
     from router.db import get_session
-    from router.models import MODELS
 
 
 @pytest.fixture(scope="session")

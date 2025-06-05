@@ -149,7 +149,6 @@ async def proxy(
                 async def stream_with_cost():
                     # Store all chunks to analyze
                     stored_chunks = []
-                    usage_data_found = False
 
                     async for chunk in response.aiter_bytes():
                         # Store chunk for later analysis
@@ -190,7 +189,6 @@ async def proxy(
                                         # Format as SSE and yield
                                         cost_json = json.dumps({"cost": cost_data})
                                         yield f"data: {cost_json}\n\n".encode()
-                                        usage_data_found = True
                                         break
                                 except json.JSONDecodeError:
                                     continue
