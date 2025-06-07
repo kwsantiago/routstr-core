@@ -22,10 +22,12 @@ class Pricing(BaseModel):
     internal_reasoning: float
     max_cost: float = 0.0  # in sats not msats
 
+
 class TopProvider(BaseModel):
     context_length: int | None = None
     max_completion_tokens: int | None = None
     is_moderated: bool | None = None
+
 
 class Model(BaseModel):
     id: str
@@ -55,10 +57,42 @@ async def update_sats_pricing() -> None:
                     **{k: v / sats_to_usd for k, v in model.pricing.dict().items()}
                 )
                 if model.top_provider:
-                    if model.top_provider.context_length and model.top_provider.max_completion_tokens:
-                        max_context_cost = model.top_provider.context_length * model.sats_pricing.prompt
-                        max_completion_cost = model.top_provider.max_completion_tokens * model.sats_pricing.completion
-                        model.sats_pricing.max_cost = max_context_cost + max_completion_cost
+                    if (
+                        model.top_provider.context_length
+                        and model.top_provider.max_completion_tokens
+                    ):
+                        max_context_cost = (
+                            model.top_provider.context_length
+                            * model.sats_pricing.prompt
+                        )
+                        max_completion_cost = (
+                            model.top_provider.max_completion_tokens
+                            * model.sats_pricing.completion
+                        )
+                        model.sats_pricing.max_cost = (
+                            max_context_cost + max_completion_cost
+                        )
+                    elif model.top_provider.context_length:
+                        max_context_cost = (
+                            model.top_provider.context_length
+                            * model.sats_pricing.prompt
+                        )
+                        max_completion_cost = 32_000 * model.sats_pricing.completion
+                        model.sats_pricing.max_cost = (
+                            max_context_cost + max_completion_cost
+                        )
+                    elif model.top_provider.max_completion_tokens:
+                        max_completion_cost = (
+                            model.top_provider.max_completion_tokens
+                            * model.sats_pricing.completion
+                        )
+                        max_context_cost = 1_048_576 * model.sats_pricing.prompt
+                        model.sats_pricing.max_cost = max_completion_cost
+                    else:
+                        model.sats_pricing.max_cost = (
+                            1_048_576 * model.sats_pricing.prompt
+                            + 32_000 * model.sats_pricing.completion
+                        )
                 else:
                     p = model.sats_pricing.prompt * 1_000_000
                     c = model.sats_pricing.completion * 32_000
@@ -68,5 +102,5 @@ async def update_sats_pricing() -> None:
                     ir = model.sats_pricing.internal_reasoning * 100
                     model.sats_pricing.max_cost = p + c + r + i + w + ir
         except Exception as e:
-            print('Error updating sats pricing: ', e)
+            print("Error updating sats pricing: ", e)
         await asyncio.sleep(10)
