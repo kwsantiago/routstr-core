@@ -1,5 +1,7 @@
 import asyncio
 import json
+import os
+from pathlib import Path
 from pydantic.v1 import BaseModel
 
 from .price import sats_usd_ask_price
@@ -44,8 +46,35 @@ class Model(BaseModel):
 
 MODELS: list[Model] = []
 
-with open("models.json", "r") as f:
-    MODELS = [Model(**model) for model in json.load(f)["models"]]
+
+def load_models() -> list[Model]:
+    """Load model definitions from a JSON file.
+
+    The file path can be specified via the ``MODELS_PATH`` environment variable.
+    If ``models.json`` is not found, the bundled ``models.example.json`` is used
+    as a fallback. If neither file exists or an error occurs while loading, an
+    empty list is returned.
+    """
+
+    models_path = Path(os.environ.get("MODELS_PATH", "models.json"))
+    if not models_path.exists():
+        example = Path(__file__).resolve().parent.parent / "models.example.json"
+        if example.exists():
+            models_path = example
+        else:
+            return []
+
+    try:
+        with models_path.open("r") as f:
+            data = json.load(f)
+    except Exception as e:  # pragma: no cover - log and continue
+        print(f"Error loading models from {models_path}: {e}")
+        return []
+
+    return [Model(**model) for model in data.get("models", [])]
+
+
+MODELS = load_models()
 
 
 async def update_sats_pricing() -> None:

@@ -105,7 +105,7 @@ async def pay_for_request(
     request: Request | None,
     request_body: bytes | None = None,
 ) -> None:
-    if MODEL_BASED_PRICING and os.path.exists("models.json"):
+    if MODEL_BASED_PRICING and MODELS:
         if request_body:
             body = json.loads(request_body)
         else:
@@ -180,7 +180,7 @@ async def adjust_payment_for_tokens(
     MSATS_PER_1K_INPUT_TOKENS = COST_PER_1K_INPUT_TOKENS
     MSATS_PER_1K_OUTPUT_TOKENS = COST_PER_1K_OUTPUT_TOKENS
 
-    if MODEL_BASED_PRICING and os.path.exists("models.json"):
+    if MODEL_BASED_PRICING and MODELS:
         response_model = response_data.get("model", "")
         if response_model not in [model.id for model in MODELS]:
             raise HTTPException(
