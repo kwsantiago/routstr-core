@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from pydantic.v1 import BaseModel
 
 from .price import sats_usd_ask_price
@@ -42,7 +43,11 @@ class Model(BaseModel):
 
 MODELS: list[Model] = []
 
-with open("models.json", "r") as f:
+models_file = "models.json"
+if not os.path.exists(models_file):
+    models_file = "models.example.json"
+
+with open(models_file, "r") as f:
     MODELS = [Model(**model) for model in json.load(f)["models"]]
 
 
