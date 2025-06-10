@@ -88,7 +88,7 @@ async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -
         .where(col(ApiKey.hashed_key) == key.hashed_key)
         .values(balance=col(ApiKey.balance) + amount)
     )
-    await session.exec(stmt)
+    await session.exec(stmt)  # type: ignore[call-overload]
     await session.commit()
     await session.refresh(key)
     return amount
@@ -150,7 +150,7 @@ async def refund_balance(amount_msats: int, key: ApiKey, session: AsyncSession) 
         .where(col(ApiKey.balance) >= amount_msats)
         .values(balance=col(ApiKey.balance) - amount_msats)
     )
-    result = await session.exec(stmt)
+    result = await session.exec(stmt)  # type: ignore[call-overload]
     await session.commit()
     if result.rowcount == 0:
         raise ValueError("Insufficient balance.")

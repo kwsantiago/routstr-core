@@ -161,7 +161,7 @@ async def pay_for_request(
             total_requests=col(ApiKey.total_requests) + 1,
         )
     )
-    result = await session.exec(stmt)
+    result = await session.exec(stmt)  # type: ignore[call-overload]
     await session.commit()
     if result.rowcount == 0:
         # Another concurrent request spent the balance first
@@ -274,7 +274,7 @@ async def adjust_payment_for_tokens(
                     total_spent=col(ApiKey.total_spent) + cost_difference,
                 )
             )
-            result = await session.exec(charge_stmt)
+            result = await session.exec(charge_stmt)  # type: ignore[call-overload]
             await session.commit()
             if result.rowcount:
                 cost_data["total_msats"] = COST_PER_REQUEST + cost_difference
@@ -290,7 +290,7 @@ async def adjust_payment_for_tokens(
                 total_spent=col(ApiKey.total_spent) - refund,
             )
         )
-        await session.exec(refund_stmt)
+        await session.exec(refund_stmt)  # type: ignore[call-overload]
         await session.commit()
         cost_data["total_msats"] = COST_PER_REQUEST - refund
         await session.refresh(key)
