@@ -4,6 +4,7 @@ import time
 
 from sixty_nuts import Wallet
 from sqlmodel import select, func, col
+from sqlalchemy import update
 from .db import ApiKey, AsyncSession, get_session
 
 
@@ -76,9 +77,21 @@ async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -
     await WALLET.redeem(cashu_token)
     state_after = await WALLET.fetch_wallet_state()
     amount = (state_after.balance - state_before.balance) * 1000
-    key.balance += amount
+
+    # Ensure the key is persisted so the update statement can succeed
     session.add(key)
+    await session.flush()
+
+    # Apply the balance change atomically to avoid race conditions when topping
+    # up the same key concurrently.
+    stmt = (
+        update(ApiKey)
+        .where(ApiKey.hashed_key == key.hashed_key)
+        .values(balance=ApiKey.balance + amount)
+    )
+    await session.exec(stmt)
     await session.commit()
+    await session.refresh(key)
     return amount
 
 
@@ -122,8 +135,6 @@ async def check_for_refunds() -> None:
 
 
 async def refund_balance(amount_msats: int, key: ApiKey, session: AsyncSession) -> int:
-    if key.balance < amount_msats:
-        raise ValueError("Insufficient balance.")
     if amount_msats <= 0:
         amount_msats = key.balance
 
@@ -132,9 +143,19 @@ async def refund_balance(amount_msats: int, key: ApiKey, session: AsyncSession) 
     if amount_sats == 0:
         raise ValueError("Amount too small to refund (less than 1 sat)")
 
-    key.balance -= amount_msats
-    session.add(key)
+    # Atomically deduct the balance to avoid race conditions when multiple
+    # refunds are triggered concurrently.
+    stmt = (
+        update(ApiKey)
+        .where(ApiKey.hashed_key == key.hashed_key)
+        .where(ApiKey.balance >= amount_msats)
+        .values(balance=ApiKey.balance - amount_msats)
+    )
+    result = await session.exec(stmt)
     await session.commit()
+    if result.rowcount == 0:
+        raise ValueError("Insufficient balance.")
+    await session.refresh(key)
 
     if key.refund_address is None:
         raise ValueError("Refund address not set.")
