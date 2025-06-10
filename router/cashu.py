@@ -3,9 +3,7 @@ import asyncio
 import time
 
 from sixty_nuts import Wallet
-from sqlmodel import select, func, col
-from sqlalchemy import update
-from typing import Any
+from sqlmodel import select, func, col, update
 from .db import ApiKey, AsyncSession, get_session
 
 
@@ -85,12 +83,12 @@ async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -
 
     # Apply the balance change atomically to avoid race conditions when topping
     # up the same key concurrently.
-    stmt: Any = (
+    stmt = (
         update(ApiKey)
-        .where(ApiKey.hashed_key == key.hashed_key)  # type: ignore[arg-type]
-        .values(balance=ApiKey.balance + amount)
+        .where(col(ApiKey.hashed_key) == key.hashed_key)
+        .values(balance=col(ApiKey.balance) + amount)
     )
-    await session.exec(stmt)  # type: ignore[arg-type]
+    await session.exec(stmt)
     await session.commit()
     await session.refresh(key)
     return amount
@@ -146,13 +144,13 @@ async def refund_balance(amount_msats: int, key: ApiKey, session: AsyncSession) 
 
     # Atomically deduct the balance to avoid race conditions when multiple
     # refunds are triggered concurrently.
-    stmt: Any = (
+    stmt = (
         update(ApiKey)
-        .where(ApiKey.hashed_key == key.hashed_key)  # type: ignore[arg-type]
-        .where(ApiKey.balance >= amount_msats)  # type: ignore[arg-type]
-        .values(balance=ApiKey.balance - amount_msats)
+        .where(col(ApiKey.hashed_key) == key.hashed_key)
+        .where(col(ApiKey.balance) >= amount_msats)
+        .values(balance=col(ApiKey.balance) - amount_msats)
     )
-    result = await session.exec(stmt)  # type: ignore[arg-type]
+    result = await session.exec(stmt)
     await session.commit()
     if result.rowcount == 0:
         raise ValueError("Insufficient balance.")

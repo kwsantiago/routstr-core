@@ -6,8 +6,7 @@ from typing import Optional
 
 
 from fastapi import HTTPException, Request
-from sqlalchemy import update
-from typing import Any
+from sqlmodel import update, col
 
 from .cashu import credit_balance, pay_out
 from .db import ApiKey, AsyncSession
@@ -152,17 +151,17 @@ async def pay_for_request(
         )
 
     # Charge the base cost for the request atomically to avoid race conditions
-    stmt: Any = (
+    stmt = (
         update(ApiKey)
-        .where(ApiKey.hashed_key == key.hashed_key)  # type: ignore[arg-type]
-        .where(ApiKey.balance >= COST_PER_REQUEST)  # type: ignore[arg-type]
+        .where(col(ApiKey.hashed_key) == key.hashed_key)
+        .where(col(ApiKey.balance) >= COST_PER_REQUEST)
         .values(
-            balance=ApiKey.balance - COST_PER_REQUEST,
-            total_spent=ApiKey.total_spent + COST_PER_REQUEST,
-            total_requests=ApiKey.total_requests + 1,
+            balance=col(ApiKey.balance) - COST_PER_REQUEST,
+            total_spent=col(ApiKey.total_spent) + COST_PER_REQUEST,
+            total_requests=col(ApiKey.total_requests) + 1,
         )
     )
-    result = await session.exec(stmt)  # type: ignore[arg-type]
+    result = await session.exec(stmt)
     await session.commit()
     if result.rowcount == 0:
         # Another concurrent request spent the balance first
@@ -266,16 +265,16 @@ async def adjust_payment_for_tokens(
             cost_data["balance_shortage_msats"] = cost_difference - key.balance
             await session.commit()
         else:
-            charge_stmt: Any = (
+            charge_stmt = (
                 update(ApiKey)
-                .where(ApiKey.hashed_key == key.hashed_key)  # type: ignore[arg-type]
-                .where(ApiKey.balance >= cost_difference)  # type: ignore[arg-type]
+                .where(col(ApiKey.hashed_key) == key.hashed_key)
+                .where(col(ApiKey.balance) >= cost_difference)
                 .values(
-                    balance=ApiKey.balance - cost_difference,
-                    total_spent=ApiKey.total_spent + cost_difference,
+                    balance=col(ApiKey.balance) - cost_difference,
+                    total_spent=col(ApiKey.total_spent) + cost_difference,
                 )
             )
-            result = await session.exec(charge_stmt)  # type: ignore[arg-type]
+            result = await session.exec(charge_stmt)
             await session.commit()
             if result.rowcount:
                 cost_data["total_msats"] = COST_PER_REQUEST + cost_difference
@@ -283,15 +282,15 @@ async def adjust_payment_for_tokens(
     else:
         # Refund some of the base cost
         refund = abs(cost_difference)
-        refund_stmt: Any = (
+        refund_stmt = (
             update(ApiKey)
-            .where(ApiKey.hashed_key == key.hashed_key)  # type: ignore[arg-type]
+            .where(col(ApiKey.hashed_key) == key.hashed_key)
             .values(
-                balance=ApiKey.balance + refund,
-                total_spent=ApiKey.total_spent - refund,
+                balance=col(ApiKey.balance) + refund,
+                total_spent=col(ApiKey.total_spent) - refund,
             )
         )
-        await session.exec(refund_stmt)  # type: ignore[arg-type]
+        await session.exec(refund_stmt)
         await session.commit()
         cost_data["total_msats"] = COST_PER_REQUEST - refund
         await session.refresh(key)
