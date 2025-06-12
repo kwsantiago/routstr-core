@@ -17,14 +17,15 @@ NSEC = os.environ["NSEC"]  # Nostr private key for the wallet
 
 WALLET = Wallet(nsec=NSEC, mint_urls=[MINT])
 
+
 async def init_wallet():
     global WALLET
     WALLET = await Wallet.create(nsec=NSEC, mint_urls=[MINT])
-    
+
+
 async def close_wallet():
     global WALLET
     await WALLET.aclose()
-
 
 
 async def pay_out() -> None:
@@ -93,13 +94,12 @@ async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -
     stmt = (
         update(ApiKey)
         .where(col(ApiKey.hashed_key) == key.hashed_key)
-        .values(balance=col(ApiKey.balance) + amount)
+        .values(balance=col(ApiKey.balance) + amount_msats)
     )
     await session.exec(stmt)  # type: ignore[call-overload]
     await session.commit()
 
     return amount_msats
-
 
 
 async def check_for_refunds() -> None:
