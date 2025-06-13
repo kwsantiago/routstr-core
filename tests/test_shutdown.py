@@ -2,8 +2,9 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from tests.conftest import TEST_ENV
+
 from router.main import app, lifespan
+from tests.conftest import TEST_ENV
 
 
 @pytest.mark.asyncio

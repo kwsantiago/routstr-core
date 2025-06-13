@@ -1,14 +1,15 @@
 import asyncio
 import os
+from typing import AsyncGenerator, Generator
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 import pytest_asyncio
-from typing import AsyncGenerator, Generator
 from fastapi.testclient import TestClient
-from httpx import AsyncClient, ASGITransport
-from sqlmodel import SQLModel
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
-from unittest.mock import patch, MagicMock, AsyncMock
 
 # Save original environment variables
 ORIGINAL_ENV = os.environ.copy()
@@ -55,8 +56,8 @@ with patch("sixty_nuts.Wallet") as mock_wallet_class:
     # Make the Wallet class return our mock when instantiated
     mock_wallet_class.return_value = mock_wallet
 
-    from router.main import app
     from router.db import get_session
+    from router.main import app
 
 
 @pytest.fixture(scope="session")

@@ -1,13 +1,13 @@
-import os
 import json
-from fastapi import APIRouter, Request, BackgroundTasks, Depends
-from fastapi.responses import Response, StreamingResponse
-import httpx
+import os
 import re
 
-from .cashu import pay_out
+import httpx
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi.responses import Response, StreamingResponse
 
-from .auth import validate_bearer_key, pay_for_request, adjust_payment_for_tokens
+from .auth import adjust_payment_for_tokens, pay_for_request, validate_bearer_key
+from .cashu import pay_out
 from .db import AsyncSession, get_session
 
 UPSTREAM_BASE_URL = os.environ["UPSTREAM_BASE_URL"]

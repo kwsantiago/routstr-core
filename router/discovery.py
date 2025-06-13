@@ -1,12 +1,13 @@
-from fastapi import APIRouter
 import asyncio
 import json
-import websockets
-import random
-import string
-import re
-import httpx
 import os
+import random
+import re
+import string
+
+import httpx
+import websockets
+from fastapi import APIRouter
 
 providers_router = APIRouter(prefix="/v1/providers")
 

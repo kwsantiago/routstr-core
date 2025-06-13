@@ -1,10 +1,12 @@
-import pytest
-import pytest_asyncio
 import json
 import os
 import uuid
 from unittest.mock import AsyncMock, patch
+
+import pytest
+import pytest_asyncio
 from httpx import AsyncClient
+
 from router.db import ApiKey, AsyncSession
 
 
@@ -260,7 +262,7 @@ async def test_proxy_with_model_based_pricing(
     with patch.dict(os.environ, {"MODEL_BASED_PRICING": "true"}):
         with patch("os.path.exists", return_value=True):
             # Mock a model with pricing
-            from router.models import MODELS, Model, Pricing, Architecture, TopProvider
+            from router.models import MODELS, Architecture, Model, Pricing, TopProvider
 
             test_model = Model(
                 id="gpt-4",

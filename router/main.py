@@ -1,18 +1,20 @@
 import asyncio
-from contextlib import asynccontextmanager
 import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .db import init_db
-from .admin import admin_router
-from .proxy import proxy_router
 from .account import wallet_router
-from .models import MODELS, update_sats_pricing
-from .cashu import check_for_refunds, init_wallet, close_wallet
+from .admin import admin_router
+from .cashu import check_for_refunds, close_wallet, init_wallet
+from .db import init_db
 from .discovery import providers_router
+from .models import MODELS, update_sats_pricing
+from .proxy import proxy_router
 
 __version__ = "0.0.1"
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):

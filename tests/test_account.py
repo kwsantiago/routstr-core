@@ -1,9 +1,11 @@
-import pytest
-import pytest_asyncio
 import hashlib
 import uuid
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
+
+import pytest
+import pytest_asyncio
 from httpx import AsyncClient
+
 from router.db import ApiKey, AsyncSession
 
 

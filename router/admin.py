@@ -5,8 +5,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from sqlmodel import select
 
-from .db import ApiKey, create_session
 from .cashu import WALLET
+from .db import ApiKey, create_session
 
 admin_router = APIRouter(prefix="/admin")
 

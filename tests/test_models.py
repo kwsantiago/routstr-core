@@ -1,7 +1,16 @@
-import pytest
 import asyncio
-from unittest.mock import patch, AsyncMock
-from router.models import Model, Architecture, Pricing, TopProvider, update_sats_pricing, MODELS
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from router.models import (
+    MODELS,
+    Architecture,
+    Model,
+    Pricing,
+    TopProvider,
+    update_sats_pricing,
+)
 
 
 @pytest.fixture

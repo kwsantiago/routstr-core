@@ -1,12 +1,11 @@
 import asyncio
 import hashlib
-import os
 import json
+import os
 from typing import Optional
 
-
 from fastapi import HTTPException, Request
-from sqlmodel import update, col
+from sqlmodel import col, update
 
 from .cashu import credit_balance, pay_out
 from .db import ApiKey, AsyncSession

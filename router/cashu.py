@@ -1,11 +1,11 @@
-import os
 import asyncio
+import os
 import time
 
 from sixty_nuts import Wallet
-from sqlmodel import select, func, col, update
-from .db import ApiKey, AsyncSession, get_session
+from sqlmodel import col, func, select, update
 
+from .db import ApiKey, AsyncSession, get_session
 
 RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
 MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
