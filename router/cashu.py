@@ -24,6 +24,7 @@ async def delete_key_if_zero_balance(key: ApiKey, session: AsyncSession) -> None
         await session.delete(key)
         await session.commit()
 
+
 async def init_wallet():
     global WALLET
     WALLET = await Wallet.create(nsec=NSEC, mint_urls=[MINT])
@@ -42,12 +43,11 @@ async def pay_out() -> None:
         from .db import create_session
 
         async with create_session() as session:
-            balance = (
-                await session.exec(
-                    select(func.sum(col(ApiKey.balance))).where(ApiKey.balance > 0)
-                )
-            ).one()
-            if balance is None or balance == 0:
+            result = await session.exec(
+                select(func.sum(col(ApiKey.balance))).where(ApiKey.balance > 0)
+            )
+            balance = result.one_or_none()
+            if not balance:
                 # No balance to pay out - this is OK, not an error
                 return
 
