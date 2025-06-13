@@ -46,6 +46,7 @@ class Model(BaseModel):
 
 MODELS: list[Model] = []
 
+
 def load_models() -> list[Model]:
      """Load model definitions from a JSON file.
      The file path can be specified via the ``MODELS_PATH`` environment variable.
