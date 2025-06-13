@@ -205,3 +205,18 @@ async def test_account_with_cashu_token(
         assert data["balance"] >= 0  # Balance should be set after credit_balance
 
 
+@pytest.mark.asyncio
+async def test_account_with_invalid_cashu_token(async_client: AsyncClient):
+    """Test authentication with an invalid cashu token returns 401."""
+
+    with patch("router.auth.credit_balance", new_callable=AsyncMock) as mock_credit:
+        mock_credit.return_value = 0
+
+        response = await async_client.get(
+            "/v1/wallet/", headers={"Authorization": "Bearer cashuInvalid"}
+        )
+
+        assert response.status_code == 401
+        error = response.json()
+        assert error["detail"]["error"]["code"] == "invalid_api_key"
+
