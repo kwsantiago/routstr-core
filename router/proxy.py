@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from typing import AsyncGenerator
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
@@ -16,12 +17,10 @@ UPSTREAM_API_KEY = os.environ.get("UPSTREAM_API_KEY", "")
 proxy_router = APIRouter()
 
 
-@proxy_router.api_route(
-    "/{path:path}", methods=["GET", "POST"]
-)
+@proxy_router.api_route("/{path:path}", methods=["GET", "POST"], response_model=None)
 async def proxy(
     request: Request, path: str, session: AsyncSession = Depends(get_session)
-):
+) -> Response | StreamingResponse:
     auth = request.headers.get("Authorization", "")
     bearer_key = auth.replace("Bearer ", "") if auth.startswith("Bearer ") else ""
     refund_address = request.headers.get("Refund-LNURL", None)
@@ -146,7 +145,7 @@ async def proxy(
 
             if is_streaming and response.status_code == 200:
                 # Process streaming response and extract cost from the last chunk
-                async def stream_with_cost():
+                async def stream_with_cost() -> AsyncGenerator[bytes, None]:
                     # Store all chunks to analyze
                     stored_chunks = []
 

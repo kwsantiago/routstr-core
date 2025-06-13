@@ -25,12 +25,12 @@ async def delete_key_if_zero_balance(key: ApiKey, session: AsyncSession) -> None
         await session.commit()
 
 
-async def init_wallet():
+async def init_wallet() -> None:
     global WALLET
     WALLET = await Wallet.create(nsec=NSEC, mint_urls=[MINT])
 
 
-async def close_wallet():
+async def close_wallet() -> None:
     global WALLET
     await WALLET.aclose()
 

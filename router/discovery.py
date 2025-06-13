@@ -139,7 +139,7 @@ async def fetch_onion(provider: str) -> dict:
 
 
 @providers_router.get("/")
-async def get_providers(include_json: bool = False):
+async def get_providers(include_json: bool = False) -> dict[str, list[dict | str]]:
     npub = "npub130mznv74rxs032peqym6g3wqavh472623mt3z5w73xq9r6qqdufs7ql29s"
 
     # Relays that support NIP-50 text search

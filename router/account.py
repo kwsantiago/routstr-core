@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
@@ -49,8 +49,9 @@ async def topup_wallet_endpoint(
     cashu_token: str,
     key: ApiKey = Depends(get_key_from_header),
     session: AsyncSession = Depends(get_session),
-):
-    return await credit_balance(cashu_token, key, session)
+) -> dict[str, int]:
+    amount_msats = await credit_balance(cashu_token, key, session)
+    return {"msats": amount_msats}
 
 
 @wallet_router.post("/refund")
@@ -88,9 +89,12 @@ async def refund_wallet_endpoint(
 
 
 @wallet_router.api_route(
-    "/{path:path}", methods=["GET", "POST", "PUT", "DELETE"], include_in_schema=False
+    "/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE"],
+    include_in_schema=False,
+    response_model=None,
 )
-async def wallet_catch_all(path: str):
+async def wallet_catch_all(path: str) -> NoReturn:
     raise HTTPException(
         status_code=404, detail="Not found check /docs for available endpoints"
     )

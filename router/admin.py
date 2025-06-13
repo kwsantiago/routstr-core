@@ -155,7 +155,7 @@ async def dashboard(request: Request) -> str:
 
 
 @admin_router.get("/", response_class=HTMLResponse)
-async def admin(request: Request):
+async def admin(request: Request) -> str:
     admin_cookie = request.cookies.get("admin_password")
     if admin_cookie and admin_cookie == os.getenv("ADMIN_PASSWORD"):
         return await dashboard(request)

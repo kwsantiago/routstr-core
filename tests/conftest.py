@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -61,7 +61,7 @@ with patch("sixty_nuts.Wallet") as mock_wallet_class:
 
 
 @pytest.fixture(scope="session")
-def event_loop():
+def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
     """Create an instance of the default event loop for the test session."""
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
@@ -69,7 +69,7 @@ def event_loop():
 
 
 @pytest_asyncio.fixture(scope="function")
-async def test_engine():
+async def test_engine() -> AsyncGenerator[AsyncEngine, None]:
     """Create a test database engine - new for each test."""
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
@@ -86,7 +86,7 @@ async def test_engine():
 
 
 @pytest_asyncio.fixture
-async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
+async def test_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
     """Create a test database session."""
     from sqlmodel.ext.asyncio.session import AsyncSession as SqlModelAsyncSession
 
@@ -123,10 +123,10 @@ def test_client() -> Generator[TestClient, None, None]:
 
 
 @pytest_asyncio.fixture
-async def async_client(test_session) -> AsyncGenerator[AsyncClient, None]:
+async def async_client(test_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Create an async test client with dependency overrides."""
 
-    async def override_get_session():
+    async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
         yield test_session
 
     app.dependency_overrides[get_session] = override_get_session
@@ -164,7 +164,7 @@ async def async_client(test_session) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest.fixture
-def mock_models():
+def mock_models() -> list[dict]:
     """Mock models data for testing."""
     return [
         {
@@ -199,7 +199,7 @@ def mock_models():
 
 # Cleanup after all tests
 @pytest.fixture(scope="session", autouse=True)
-def cleanup():
+def cleanup() -> Generator[None, None, None]:
     yield
     # Restore original environment carefully
     current_keys = set(os.environ.keys())

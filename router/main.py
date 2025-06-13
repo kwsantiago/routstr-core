@@ -1,6 +1,7 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,7 +18,7 @@ __version__ = "0.0.1"
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
     await init_wallet()
     pricing_task = asyncio.create_task(update_sats_pricing())
@@ -51,7 +52,7 @@ app.add_middleware(
 
 
 @app.get("/")
-async def info():
+async def info() -> dict:
     return {
         "name": app.title,
         "description": app.description,
