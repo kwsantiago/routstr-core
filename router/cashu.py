@@ -3,7 +3,7 @@ import asyncio
 import time
 
 from sixty_nuts import Wallet
-from sqlmodel import select, func, col
+from sqlmodel import select, func, col, update
 from .db import ApiKey, AsyncSession, get_session
 
 
@@ -16,6 +16,13 @@ DEVS_DONATION_RATE = float(os.environ.get("DEVS_DONATION_RATE", 0.021))  # 2.1%
 NSEC = os.environ["NSEC"]  # Nostr private key for the wallet
 
 WALLET = Wallet(nsec=NSEC, mint_urls=[MINT])
+
+
+async def delete_key_if_zero_balance(key: ApiKey, session: AsyncSession) -> None:
+    """Delete the given API key if its balance is zero."""
+    if key.balance == 0:
+        await session.delete(key)
+        await session.commit()
 
 
 async def init_wallet():
@@ -72,14 +79,33 @@ async def pay_out() -> None:
 
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
-    state_before = await WALLET.fetch_wallet_state()
-    await WALLET.redeem(cashu_token)
-    state_after = await WALLET.fetch_wallet_state()
-    amount = (state_after.balance - state_before.balance) * 1000
-    key.balance += amount
+    """Redeem a Cashu token and credit the amount to the API key balance."""
+    try:
+        amount_sats = await WALLET.redeem(cashu_token)
+    except Exception:
+        # Ensure the balance cannot become negative if redeem fails
+        return 0
+
+    if amount_sats <= 0:
+        return 0
+
+    amount_msats = amount_sats * 1000
+    key.balance += amount_msats
+
     session.add(key)
+    await session.flush()
+
+    # Apply the balance change atomically to avoid race conditions when topping
+    # up the same key concurrently.
+    stmt = (
+        update(ApiKey)
+        .where(col(ApiKey.hashed_key) == key.hashed_key)
+        .values(balance=col(ApiKey.balance) + amount_msats)
+    )
+    await session.exec(stmt)  # type: ignore[call-overload]
     await session.commit()
-    return amount
+
+    return amount_msats
 
 
 async def check_for_refunds() -> None:
@@ -112,16 +138,17 @@ async def check_for_refunds() -> None:
                             flush=True,
                         )
                         await refund_balance(key.balance, key, session)
+                        await delete_key_if_zero_balance(key, session)
 
             # Sleep for the specified interval before checking again
             await asyncio.sleep(REFUND_PROCESSING_INTERVAL)
+        except asyncio.CancelledError:
+            break
         except Exception as e:
             print(f"Error during refund check: {e}")
 
 
 async def refund_balance(amount_msats: int, key: ApiKey, session: AsyncSession) -> int:
-    if key.balance < amount_msats:
-        raise ValueError("Insufficient balance.")
     if amount_msats <= 0:
         amount_msats = key.balance
 
@@ -130,9 +157,20 @@ async def refund_balance(amount_msats: int, key: ApiKey, session: AsyncSession) 
     if amount_sats == 0:
         raise ValueError("Amount too small to refund (less than 1 sat)")
 
-    key.balance -= amount_msats
-    session.add(key)
+    # Atomically deduct the balance to avoid race conditions when multiple
+    # refunds are triggered concurrently.
+    stmt = (
+        update(ApiKey)
+        .where(col(ApiKey.hashed_key) == key.hashed_key)
+        .where(col(ApiKey.balance) >= amount_msats)
+        .values(balance=col(ApiKey.balance) - amount_msats)
+    )
+    result = await session.exec(stmt)  # type: ignore[call-overload]
     await session.commit()
+    if result.rowcount == 0:
+        raise ValueError("Insufficient balance.")
+    await session.refresh(key)
+    await delete_key_if_zero_balance(key, session)
 
     if key.refund_address is None:
         raise ValueError("Refund address not set.")

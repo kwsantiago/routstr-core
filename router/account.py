@@ -2,11 +2,15 @@ from typing import Annotated
 from fastapi import APIRouter, Header, HTTPException, Depends
 
 from .auth import validate_bearer_key
-from .cashu import refund_balance, credit_balance, WALLET
+from .cashu import (
+    refund_balance,
+    credit_balance,
+    WALLET,
+    delete_key_if_zero_balance,
+)
 from .db import ApiKey, AsyncSession, get_session
 
 wallet_router = APIRouter(prefix="/v1/wallet")
-
 
 async def get_key_from_header(
     authorization: Annotated[str, Header(...)],
@@ -72,6 +76,7 @@ async def refund_wallet_endpoint(
     key.balance = 0
     session.add(key)
     await session.commit()
+    await delete_key_if_zero_balance(key, session)
     
     return result
 
