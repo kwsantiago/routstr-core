@@ -1,17 +1,8 @@
 # proxy
 
-a reverse proxy that you can plug in front of any openai compatible api endpoint
-to handle payments using the cashu protocol (Bitcoin L3)
+a reverse proxy that you can plug in front of any OpenAI compatible API
+endpoint to handle payments using the Cashu protocol (Bitcoin L3).
 
-## Database Migrations
-
-Alembic is used to manage the database schema for the `ApiKey` model defined in
-`router/db.py`. Before running the application for the first time or after
-pulling updates, apply the migrations with:
-
-```bash
-alembic upgrade head
-```
-
-The configuration reads the `DATABASE_URL` environment variable to determine the
-database connection.
+Model pricing information is loaded from ``models.json`` by default. If that
+file is not present, the bundled ``models.example.json`` will be used. You can
+specify a custom path with the ``MODELS_PATH`` environment variable.
