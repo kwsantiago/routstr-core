@@ -46,7 +46,6 @@ markers = [
 ]
 
 [tool.ruff.lint]
-exclude = ["gptassistant/bot/prompts.py"]
 select = ["E", "F", "I"]
 ignore = ["E501"]
 
