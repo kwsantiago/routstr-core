@@ -17,13 +17,16 @@ NSEC = os.environ["NSEC"]  # Nostr private key for the wallet
 
 WALLET = Wallet(nsec=NSEC, mint_urls=[MINT])
 
+
 async def init_wallet():
     global WALLET
     WALLET = await Wallet.create(nsec=NSEC, mint_urls=[MINT])
-    
+
+
 async def close_wallet():
     global WALLET
     await WALLET.aclose()
+
 
 async def pay_out() -> None:
     """
@@ -36,7 +39,7 @@ async def pay_out() -> None:
             result = await session.exec(
                 select(func.sum(col(ApiKey.balance))).where(ApiKey.balance > 0)
             )
-            balance = result.scalar_one_or_none()
+            balance = result.one_or_none()
             if not balance:
                 # No balance to pay out - this is OK, not an error
                 return
