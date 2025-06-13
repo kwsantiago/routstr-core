@@ -71,12 +71,11 @@ async def validate_bearer_key(
                 refund_address=refund_address,
                 key_expiry_time=key_expiry_time,
             )
-            await credit_balance(
-                bearer_key,
-                new_key,
-                session,
-            )
+            msats = await credit_balance(bearer_key, new_key, session)
+            if msats <= 0:
+                raise Exception("Token redemption failed")
             await session.refresh(new_key)
+            await session.commit()
             return new_key
         except Exception as e:
             print(f"Redemption failed: {e}")
