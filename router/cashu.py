@@ -18,6 +18,12 @@ NSEC = os.environ["NSEC"]  # Nostr private key for the wallet
 WALLET = Wallet(nsec=NSEC, mint_urls=[MINT])
 
 
+async def delete_key_if_zero_balance(key: ApiKey, session: AsyncSession) -> None:
+    """Delete the given API key if its balance is zero."""
+    if key.balance == 0:
+        await session.delete(key)
+        await session.commit()
+
 async def init_wallet():
     global WALLET
     WALLET = await Wallet.create(nsec=NSEC, mint_urls=[MINT])
@@ -132,6 +138,7 @@ async def check_for_refunds() -> None:
                             flush=True,
                         )
                         await refund_balance(key.balance, key, session)
+                        await delete_key_if_zero_balance(key, session)
 
             # Sleep for the specified interval before checking again
             await asyncio.sleep(REFUND_PROCESSING_INTERVAL)
@@ -163,6 +170,7 @@ async def refund_balance(amount_msats: int, key: ApiKey, session: AsyncSession) 
     if result.rowcount == 0:
         raise ValueError("Insufficient balance.")
     await session.refresh(key)
+    await delete_key_if_zero_balance(key, session)
 
     if key.refund_address is None:
         raise ValueError("Refund address not set.")

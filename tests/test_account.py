@@ -88,9 +88,9 @@ async def test_refund_balance_with_address(
         assert data["recipient"] == "test@lightning.address"
         assert data["msats"] == 1000000
 
-        # Verify balance was zeroed
-        await test_session.refresh(test_api_key)
-        assert test_api_key.balance == 0
+        # Verify the API key was deleted after refund
+        deleted_key = await test_session.get(ApiKey, test_api_key.hashed_key)
+        assert deleted_key is None
 
         # Verify refund_balance was called
         mock_refund.assert_called_once()
@@ -133,6 +133,10 @@ async def test_refund_balance_without_address(
 
         # Verify wallet.send was called with the correct amount (msats converted to sats)
         mock_wallet.send.assert_called_once_with(500)
+
+        # Verify the API key was deleted after refund
+        deleted = await test_session.get(ApiKey, api_key)
+        assert deleted is None
 
 
 @pytest.mark.asyncio
