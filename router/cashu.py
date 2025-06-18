@@ -90,10 +90,6 @@ async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -
         return 0
 
     amount_msats = amount_sats * 1000
-    key.balance += amount_msats
-
-    session.add(key)
-    await session.flush()
 
     # Apply the balance change atomically to avoid race conditions when topping
     # up the same key concurrently.
@@ -104,6 +100,7 @@ async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -
     )
     await session.exec(stmt)  # type: ignore[call-overload]
     await session.commit()
+    await session.refresh(key)
 
     return amount_msats
 
