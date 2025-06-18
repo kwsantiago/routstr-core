@@ -9,7 +9,7 @@ from fastapi.responses import Response, StreamingResponse
 
 from .auth import adjust_payment_for_tokens, pay_for_request, validate_bearer_key
 from .cashu import pay_out
-from .db import AsyncSession, get_session, create_session
+from .db import AsyncSession, create_session, get_session
 
 UPSTREAM_BASE_URL = os.environ["UPSTREAM_BASE_URL"]
 UPSTREAM_API_KEY = os.environ.get("UPSTREAM_API_KEY", "")
