@@ -20,10 +20,10 @@ COST_PER_1K_OUTPUT_TOKENS = (
     int(os.environ.get("COST_PER_1K_OUTPUT_TOKENS", "0")) * 1000
 )  # Convert to msats
 MODEL_BASED_PRICING = os.environ.get("MODEL_BASED_PRICING", "false").lower() == "true"
-PREPAID_API_KEY = os.environ.get("PREPAID_API_KEY", None)
-PREPAID_BALANCE = (
-    int(os.environ.get("PREPAID_BALANCE", "0")) * 1000
-)  # Convert to msats
+
+# TODO: implement prepaid api key (not like it was before)
+# PREPAID_API_KEY = os.environ.get("PREPAID_API_KEY", None)
+# PREPAID_BALANCE = int(os.environ.get("PREPAID_BALANCE", "0")) * 1000  # Convert to msats
 
 
 async def validate_bearer_key(
@@ -56,14 +56,6 @@ async def validate_bearer_key(
             if refund_address is not None:
                 existing_key.refund_address = refund_address
             return existing_key
-        elif bearer_key := PREPAID_API_KEY:
-            hashed_key = hashlib.sha256(bearer_key.encode()).hexdigest()
-            if exsisting_key := await session.get(ApiKey, hashed_key):
-                return exsisting_key
-            new_key = ApiKey(hashed_key=hashed_key, balance=PREPAID_BALANCE)
-            session.add(new_key)
-            await session.commit()
-            return new_key
 
     if bearer_key.startswith("cashu"):
         try:
