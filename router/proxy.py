@@ -333,7 +333,9 @@ async def proxy(
         request, path, headers, request_body, key, session
     )
 
-    if response.status_code != 200 and (key is not None and key.refund_address == "X-CASHU"):
+    if response.status_code != 200 and (
+        key is not None and key.refund_address == "X-CASHU"
+    ):
         refund_token = await x_cashu_refund(key, session)
         response = Response(
             content=json.dumps(
