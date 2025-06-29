@@ -21,7 +21,7 @@ WALLET: Wallet | None = None
 
 async def init_wallet() -> None:
     global WALLET
-    WALLET = await Wallet.create(nsec=NSEC)
+    WALLET = await Wallet.create(nsec=NSEC, mint_urls=[MINT], currency="msat")
 
 
 def wallet() -> Wallet:
