@@ -1,7 +1,6 @@
 import json
-import re
 import traceback
-from typing import AsyncGenerator, Literal, cast
+from typing import Literal, cast
 
 import httpx
 from fastapi import BackgroundTasks, HTTPException, Request
@@ -57,7 +56,7 @@ async def forward_to_upstream(
             )
 
             if path.endswith("chat/completions"):
-                result = await handle_streaming_chat_completion(response, amount)
+                result = await handle_x_cashu_chat_completion(response, amount)
                 background_tasks = BackgroundTasks()
                 background_tasks.add_task(response.aclose)
                 result.background = background_tasks
@@ -92,7 +91,7 @@ async def handle_x_cashu_chat_completion(
     """Handle non-streaming chat completion responses with token-based pricing."""
     try:
         content = await response.aread()
-        print(content)
+        print(response)
         response_json = json.loads(content)
         print(response_json, amount)
         cost_data = await get_cost(response_json)
@@ -197,64 +196,4 @@ async def send_refund(amount) -> str:
                 }
             },
         )
-
-
-async def handle_streaming_chat_completion(
-    response: httpx.Response,
-    amount: int
-) -> StreamingResponse:
-    """Handle streaming chat completion responses with token-based pricing."""
-
-    async def stream_with_cost() -> AsyncGenerator[bytes, None]:
-        # Store all chunks to analyze
-        stored_chunks = []
-
-        async for chunk in response.aiter_bytes():
-            # Store chunk for later analysis
-            stored_chunks.append(chunk)
-
-            # Pass through each chunk to client
-            yield chunk
-
-        # Process stored chunks to find usage data
-        # Start from the end and work backwards
-        for i in range(len(stored_chunks) - 1, -1, -1):
-            chunk = stored_chunks[i]
-            if not chunk or chunk == b"":
-                continue
-
-            try:
-                # Split by "data: " to get individual SSE events
-                events = re.split(b"data: ", chunk)
-                for event_data in events:
-                    if (
-                        not event_data
-                        or event_data.strip() == b"[DONE]"
-                        or event_data.strip() == b""
-                    ):
-                        continue
-
-                    try:
-                        data = json.loads(event_data)
-                        if (
-                            "usage" in data
-                            and data["usage"] is not None
-                            and isinstance(data["usage"], dict)
-                        ):
-
-                            cost_data = await get_cost(data)
-                            cost_json = json.dumps({"cost": cost_data})
-                            yield f"data: {cost_json}\n\n".encode()
-                            break
-                    except json.JSONDecodeError:
-                        continue
-
-            except Exception as e:
-                print(f"Error processing streaming response for cost: {e}")
-
-    return StreamingResponse(
-        stream_with_cost(),
-        status_code=response.status_code,
-        headers=dict(response.headers),
-    )
 
