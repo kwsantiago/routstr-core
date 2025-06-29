@@ -303,9 +303,6 @@ async def proxy(
                 media_type="application/json",
             )
 
-    # Prepare headers for upstream
-    headers = prepare_upstream_headers(dict(request.headers))
-
     # Handle authentication
     if x_cashu := headers.get("x-cashu", None):
         # Check token balance before authentication for cashu tokens
@@ -323,11 +320,17 @@ async def proxy(
                 status_code=401,
                 media_type="application/json",
             )
+
+        # Prepare headers for upstream
+        headers = prepare_upstream_headers(dict(request.headers))
         return await forward_get_to_upstream(request, path, headers)
 
     # Only pay for request if we have request body data (for completions endpoints)
     if request_body_dict and key is not None:
         await pay_for_request(key, session, request_body_dict)
+
+    # Prepare headers for upstream
+    headers = prepare_upstream_headers(dict(request.headers))
 
     # Forward to upstream and handle response
     response = await forward_to_upstream(
