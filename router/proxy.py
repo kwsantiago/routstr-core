@@ -326,7 +326,7 @@ async def proxy(
         return await forward_get_to_upstream(request, path, headers)
 
     # Only pay for request if we have request body data (for completions endpoints)
-    if request_body_dict and key is not None:
+    if request_body_dict:
         await pay_for_request(key, session, request_body_dict)
 
     # Prepare headers for upstream
@@ -337,9 +337,8 @@ async def proxy(
         request, path, headers, request_body, key, session
     )
 
-    if response.status_code != 200 and (
-        key is not None and key.refund_address == "X-CASHU"
-    ):
+    if response.status_code != 200 and key.refund_address == "X-CASHU":
+        print(key)
         refund_token = await x_cashu_refund(key, session)
         response = Response(
             content=json.dumps(
