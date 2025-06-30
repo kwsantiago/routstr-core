@@ -7,10 +7,24 @@
 REPO_DIR="${REPO_DIR:-/home/ubuntu/proxy}"
 LOG_FILE="${LOG_FILE:-/home/ubuntu/proxy/update.log}"
 LOCK_FILE="${LOCK_FILE:-/tmp/proxy_update.lock}"
+MAX_LOG_LINES="${MAX_LOG_LINES:-10000}"  # Maximum number of log lines to keep
 
 # Function to log messages with timestamp
 log_message() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+}
+
+# Function to prune log file to keep only recent entries
+prune_logs() {
+    if [ -f "$LOG_FILE" ]; then
+        local line_count=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
+        if [ "$line_count" -gt "$MAX_LOG_LINES" ]; then
+            # Create a temporary file with only the last MAX_LOG_LINES lines
+            tail -n "$MAX_LOG_LINES" "$LOG_FILE" > "${LOG_FILE}.tmp"
+            mv "${LOG_FILE}.tmp" "$LOG_FILE"
+            log_message "Log file pruned. Kept last $MAX_LOG_LINES lines."
+        fi
+    fi
 }
 
 # Function to cleanup on exit
@@ -73,3 +87,6 @@ else
 fi
 
 log_message "Update check completed successfully"
+
+# Prune logs after each run to prevent unlimited growth
+prune_logs
