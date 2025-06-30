@@ -59,5 +59,4 @@ def convert_model_to_proxy_format(model: Model) -> ProxyModelFromApi:
 
 @models_router.get("/models")
 async def get_models() -> List[ProxyModelFromApi]:
-    a = [convert_model_to_proxy_format(model) for model in MODELS]
-    return a
+    return [convert_model_to_proxy_format(model) for model in MODELS]
