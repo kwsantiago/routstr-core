@@ -161,7 +161,6 @@ async def adjust_payment_for_tokens(
     Returns cost data to be included in the response.
     """
     max_cost = get_max_cost_for_model(model=response_data["model"])
-    cost_data = calculate_cost(response_data, max_cost)
 
     match calculate_cost(response_data, max_cost):
         case MaxCostData() as cost:
