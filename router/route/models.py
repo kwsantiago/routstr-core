@@ -10,12 +10,10 @@ models_router = APIRouter(prefix="/proxy")
 
 class ProxyModelFromApi(BaseModel):
     name: str
-    input_cost: Optional[float] = None  # Cost per 1M tokens in msat
-    output_cost: Optional[float] = None  # Cost per 1M tokens in msat
-    min_cash_per_request: Optional[float] = None  # Minimum charge per request in msat
-    min_cost_per_request: Optional[float] = (
-        None  # Alternative minimum cost per request in msat
-    )
+    input_cost: Optional[float] = None
+    output_cost: Optional[float] = None
+    min_cash_per_request: Optional[float] = None
+    min_cost_per_request: Optional[float] = None
     provider: Optional[str] = None
     soft_deleted: Optional[bool] = None
     model_type: Optional[str] = None
