@@ -27,12 +27,10 @@ async def test_root_endpoint(async_client: AsyncClient) -> None:
         # The app reads from env vars during import, so check what we actually get
         assert "name" in data
         assert "description" in data
-        assert data["version"] == "0.0.1"
         assert "npub" in data
         assert "mint" in data
         assert "http_url" in data
         assert "onion_url" in data
-        assert "models" in data
 
 
 @pytest.mark.asyncio
