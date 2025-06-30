@@ -32,7 +32,6 @@ def convert_model_to_proxy_format(model: Model) -> ProxyModelFromApi:
     is_free = None
 
     if model.sats_pricing:
-        # Convert to msat (sats * 1000) and per 1M tokens
         input_cost = model.sats_pricing.prompt * 1000 * 1_000_000
         output_cost = model.sats_pricing.completion * 1000 * 1_000_000
         min_cash_per_request = (
@@ -40,7 +39,6 @@ def convert_model_to_proxy_format(model: Model) -> ProxyModelFromApi:
         )
         min_cost_per_request = model.sats_pricing.max_cost * 1000
 
-        # Check if model is free (all costs are 0)
         is_free = (
             model.sats_pricing.prompt == 0
             and model.sats_pricing.completion == 0
@@ -53,8 +51,7 @@ def convert_model_to_proxy_format(model: Model) -> ProxyModelFromApi:
         output_cost=output_cost,
         min_cash_per_request=min_cash_per_request,
         min_cost_per_request=min_cost_per_request,
-        provider=None,  # Not available in current model
-        soft_deleted=False,  # Default to False
+        provider=None,
         model_type=model.architecture.modality,
         description=model.description,
         context_length=model.context_length,
@@ -65,5 +62,4 @@ def convert_model_to_proxy_format(model: Model) -> ProxyModelFromApi:
 @models_router.get("/models")
 async def get_models() -> List[ProxyModelFromApi]:
     a = [convert_model_to_proxy_format(model) for model in MODELS]
-    print(a)
     return a
