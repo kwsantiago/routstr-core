@@ -1,5 +1,4 @@
 import json
-import os
 import re
 import traceback
 from typing import AsyncGenerator
@@ -9,7 +8,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
 from router.payment.helpers import (
-    UPSTREAM_API_KEY,
     UPSTREAM_BASE_URL,
     check_token_balance,
     create_error_response,
