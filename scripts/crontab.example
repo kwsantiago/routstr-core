@@ -1,0 +1,3 @@
+REPO_DIR=/home/fungus/proxy
+LOG_FILE=/home/fungus/proxy/update.log
+* * * * * /home/fungus/proxy/scripts/update_proxy.sh >/dev/null 2>&1
