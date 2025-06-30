@@ -69,6 +69,11 @@ async def info() -> dict:
     }
 
 
+@app.get("/v1/models")
+async def models() -> dict:
+    return {"data": MODELS}
+
+
 app.include_router(admin_router)
 app.include_router(wallet_router)
 app.include_router(providers_router)
