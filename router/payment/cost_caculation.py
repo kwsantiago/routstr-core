@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from router.models import MODELS
 
 COST_PER_REQUEST = (
-    int(os.environ.get("COST_PER_REQUEST", "1")) * 500
+    int(os.environ.get("COST_PER_REQUEST", "1")) * 1000
 )  # Convert to msats
 COST_PER_1K_INPUT_TOKENS = (
     int(os.environ.get("COST_PER_1K_INPUT_TOKENS", "0")) * 1000
