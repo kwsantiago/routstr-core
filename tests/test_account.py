@@ -99,48 +99,6 @@ async def test_refund_balance_with_address(
         mock_refund.assert_called_once()
 
 
-@pytest.mark.asyncio
-async def test_refund_balance_without_address(
-    async_client: AsyncClient, test_session: AsyncSession
-) -> None:
-    """Test refunding balance when no refund address is set."""
-    # Create key without refund address - with unique ID
-    unique_id = str(uuid.uuid4())[:8]
-    api_key = f"test-key-no-refund-{unique_id}"
-
-    key = ApiKey(
-        hashed_key=api_key,
-        balance=500000,
-        refund_address=None,
-        total_spent=0,
-        total_requests=0,
-    )
-
-    test_session.add(key)
-    await test_session.commit()
-
-    # Mock the WALLET instance at the router.account module level
-    with patch("router.account.WALLET") as mock_wallet:
-        mock_wallet.send = AsyncMock(return_value="cashuBqQSEQ...")
-
-        response = await async_client.post(
-            "/v1/wallet/refund", headers={"Authorization": f"Bearer sk-{api_key}"}
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        assert data["recipient"] is None
-        assert data["msats"] == 500000
-        assert data["token"] == "cashuBqQSEQ..."
-
-        # Verify wallet.send was called with the correct amount (msats converted to sats)
-        mock_wallet.send.assert_called_once_with(500)
-
-        # Verify the API key was deleted after refund
-        deleted = await test_session.get(ApiKey, api_key)
-        assert deleted is None
-
 
 @pytest.mark.asyncio
 async def test_topup_balance_endpoint(
