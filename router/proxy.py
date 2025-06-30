@@ -8,13 +8,16 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
-from router.payment.helpers import (UPSTREAM_API_KEY, UPSTREAM_BASE_URL,
-                                    check_token_balance, create_error_response,
-                                    prepare_upstream_headers)
+from router.payment.helpers import (
+    UPSTREAM_API_KEY,
+    UPSTREAM_BASE_URL,
+    check_token_balance,
+    create_error_response,
+    prepare_upstream_headers,
+)
 from router.payment.x_cashu import x_cashu_handler
 
-from .auth import (adjust_payment_for_tokens, pay_for_request,
-                   validate_bearer_key)
+from .auth import adjust_payment_for_tokens, pay_for_request, validate_bearer_key
 from .cashu import x_cashu_refund
 from .db import ApiKey, AsyncSession, create_session, get_session
 

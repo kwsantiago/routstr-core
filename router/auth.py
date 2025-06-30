@@ -4,10 +4,14 @@ from typing import Optional
 from fastapi import HTTPException
 from sqlmodel import col, update
 
-from router.payment.cost_caculation import (COST_PER_REQUEST,
-                                            MODEL_BASED_PRICING, CostData,
-                                            CostDataError, MaxCostData,
-                                            calculate_cost)
+from router.payment.cost_caculation import (
+    COST_PER_REQUEST,
+    MODEL_BASED_PRICING,
+    CostData,
+    CostDataError,
+    MaxCostData,
+    calculate_cost,
+)
 from router.payment.helpers import get_max_cost_for_model
 
 from .cashu import credit_balance
@@ -96,7 +100,6 @@ async def validate_bearer_key(
             }
         },
     )
-
 
 
 async def pay_for_request(
@@ -207,7 +210,7 @@ async def adjust_payment_for_tokens(
                 )
                 await session.exec(refund_stmt)  # type: ignore[call-overload]
                 await session.commit()
-                cost_data.total_msats = max_cost - refund
+                cost.total_msats = max_cost - refund
                 await session.refresh(key)
 
             return cost.dict()

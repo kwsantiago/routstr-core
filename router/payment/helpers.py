@@ -13,7 +13,9 @@ UPSTREAM_BASE_URL = os.environ["UPSTREAM_BASE_URL"]
 UPSTREAM_API_KEY = os.environ.get("UPSTREAM_API_KEY", "")
 
 
-def check_token_balance(headers: dict, body: dict, unit: Literal['sat', 'msat']) -> None:
+def check_token_balance(
+    headers: dict, body: dict, unit: Literal["sat", "msat"]
+) -> None:
     if x_cashu := headers.get("x-cashu", None):
         cashu_token = x_cashu
     elif auth := headers.get("authorization", None):
@@ -43,7 +45,6 @@ def check_token_balance(headers: dict, body: dict, unit: Literal['sat', 'msat'])
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-
 def base64_token_json(cashu_token: str) -> dict:
     # Version 3 - JSON format
     encoded = cashu_token[6:]  # Remove "cashuA"
@@ -71,6 +72,7 @@ def get_max_cost_for_model(model: str) -> int:
         if m.id == model:
             return m.sats_pricing.max_cost * 1000  # type: ignore
     return COST_PER_REQUEST
+
 
 def create_error_response(error_type: str, message: str, status_code: int) -> Response:
     """Create a standardized error response."""
@@ -108,5 +110,3 @@ def prepare_upstream_headers(request_headers: dict) -> dict:
         headers.pop("authorization", None)
 
     return headers
-
-
