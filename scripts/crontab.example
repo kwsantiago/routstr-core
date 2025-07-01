@@ -1,0 +1,3 @@
+REPO_DIR=/home/user/proxy
+LOG_FILE=/home/user/proxy/update.log
+* * * * * /home/user/proxy/scripts/auto_update.sh >/dev/null 2>&1

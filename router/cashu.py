@@ -190,20 +190,17 @@ async def refund_balance(amount_msats: int, key: ApiKey, session: AsyncSession) 
     if key.refund_address is None:
         raise ValueError("Refund address not set.")
 
-    assert WALLET is not None, "Wallet not initialized"
-    return await WALLET.send_to_lnurl(key.refund_address, amount=amount_sats)
+    return await wallet().send_to_lnurl(key.refund_address, amount=amount_sats)
 
 
 async def x_cashu_refund(key: ApiKey, session: AsyncSession) -> str:
-    assert WALLET is not None, "Wallet not initialized"
-    refund_token = await WALLET.send(key.balance)
+    refund_token = await wallet().send(key.balance)
     await session.delete(key)
     await session.commit()
     return refund_token
 
 
 async def redeem(cashu_token: str, lnurl: str) -> int:
-    assert WALLET is not None, "Wallet not initialized"
-    amount_sats, _ = await WALLET.redeem(cashu_token)
-    await WALLET.send_to_lnurl(lnurl, amount=amount_sats)
+    amount_sats, _ = await wallet().redeem(cashu_token)
+    await wallet().send_to_lnurl(lnurl, amount=amount_sats)
     return amount_sats

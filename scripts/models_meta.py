@@ -1,8 +1,6 @@
-import asyncio
 import json
 from typing import TypedDict
-
-import httpx
+from urllib.request import urlopen
 
 
 class ModelArchitecture(TypedDict):
@@ -40,12 +38,10 @@ class Model(TypedDict):
     per_request_limits: dict | None
 
 
-async def fetch_openrouter_models() -> list[Model]:
+def fetch_openrouter_models() -> list[Model]:
     """Fetches model information from OpenRouter API."""
-    async with httpx.AsyncClient() as client:
-        response = await client.get("https://openrouter.ai/api/v1/models")
-        response.raise_for_status()
-        data = response.json()
+    with urlopen("https://openrouter.ai/api/v1/models") as response:
+        data = json.loads(response.read().decode("utf-8"))
 
         models_data: list[Model] = []
         for model in data.get("data", []):
@@ -64,8 +60,8 @@ async def fetch_openrouter_models() -> list[Model]:
         return models_data
 
 
-async def main() -> None:
-    models = await fetch_openrouter_models()
+def main() -> None:
+    models = fetch_openrouter_models()
 
     # Print the first model data in a nicely indented JSON format
     print(json.dumps(models[0], indent=4))
@@ -75,4 +71,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
