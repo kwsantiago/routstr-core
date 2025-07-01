@@ -19,19 +19,19 @@ DEVS_DONATION_RATE = float(os.environ.get("DEVS_DONATION_RATE", 0.021))  # 2.1%
 NSEC = os.environ["NSEC"]  # Nostr private key for the wallet
 CURRENCY = cast(CurrencyUnit, os.environ.get("CURRENCY", "sat"))
 
-WALLET: Wallet | None = None
+wallet_instance: Wallet | None = None
 
 
 async def init_wallet() -> None:
-    global WALLET
-    WALLET = await Wallet.create(nsec=NSEC, mint_urls=[MINT], currency=CURRENCY)
+    global wallet_instance
+    wallet_instance = await Wallet.create(nsec=NSEC)
 
 
 def wallet() -> Wallet:
-    global WALLET
-    if WALLET is None:
+    global wallet_instance
+    if wallet_instance is None:
         raise ValueError("Wallet not initialized")
-    return WALLET
+    return wallet_instance
 
 
 async def delete_key_if_zero_balance(key: ApiKey, session: AsyncSession) -> None:
