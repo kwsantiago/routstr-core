@@ -14,7 +14,7 @@ from .discovery import providers_router
 from .models import MODELS, models_router, update_sats_pricing
 from .proxy import proxy_router
 
-__version__ = "0.1.0"
+__version__ = "0.0.1"
 
 
 @asynccontextmanager
