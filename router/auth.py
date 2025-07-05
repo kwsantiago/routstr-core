@@ -4,7 +4,10 @@ from typing import Optional
 from fastapi import HTTPException
 from sqlmodel import col, update
 
-from router.payment.cost_caculation import (
+from .cashu import credit_balance
+from .db import ApiKey, AsyncSession
+from .models import MODELS
+from .payment.cost_caculation import (
     COST_PER_REQUEST,
     MODEL_BASED_PRICING,
     CostData,
@@ -12,11 +15,7 @@ from router.payment.cost_caculation import (
     MaxCostData,
     calculate_cost,
 )
-from router.payment.helpers import get_max_cost_for_model
-
-from .cashu import credit_balance
-from .db import ApiKey, AsyncSession
-from .models import MODELS
+from .payment.helpers import get_max_cost_for_model
 
 # TODO: implement prepaid api key (not like it was before)
 # PREPAID_API_KEY = os.environ.get("PREPAID_API_KEY", None)
@@ -154,7 +153,7 @@ async def pay_for_request(
 
 async def adjust_payment_for_tokens(
     key: ApiKey, response_data: dict, session: AsyncSession
-) -> dict | None:
+) -> dict:
     """
     Adjusts the payment based on token usage in the response.
     This is called after the initial payment and the upstream request is complete.
