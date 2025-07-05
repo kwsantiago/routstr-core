@@ -1,8 +1,10 @@
 import asyncio
 import os
 import time
+from typing import cast
 
 from sixty_nuts import Wallet
+from sixty_nuts.mint import CurrencyUnit
 from sqlmodel import col, func, select, update
 
 from .db import ApiKey, AsyncSession, get_session
@@ -15,6 +17,7 @@ PAYOUT_INTERVAL = int(os.environ.get("PAYOUT_INTERVAL", 300))  # Default 5 minut
 DEV_LN_ADDRESS = "routstr@minibits.cash"
 DEVS_DONATION_RATE = float(os.environ.get("DEVS_DONATION_RATE", 0.021))  # 2.1%
 NSEC = os.environ["NSEC"]  # Nostr private key for the wallet
+CURRENCY = cast(CurrencyUnit, os.environ.get("CURRENCY", "sat"))
 
 wallet_instance: Wallet | None = None
 

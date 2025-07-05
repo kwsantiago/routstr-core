@@ -112,7 +112,7 @@ async def dashboard(request: Request) -> str:
     # avoid rounding issues.
     total_user_balance = sum(key.balance for key in api_keys) // 1000
     # Fetch balance from cashu
-    current_balance = (await wallet().fetch_wallet_state()).balance
+    current_balance = await wallet().get_balance()
     owner_balance = current_balance - total_user_balance
 
     return f"""<!DOCTYPE html>
