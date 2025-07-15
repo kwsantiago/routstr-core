@@ -6,10 +6,7 @@ from sqlmodel import col, update
 
 from .cashu import credit_balance
 from .db import ApiKey, AsyncSession
-from .models import MODELS
 from .payment.cost_caculation import (
-    COST_PER_REQUEST,
-    MODEL_BASED_PRICING,
     CostData,
     CostDataError,
     MaxCostData,
@@ -101,15 +98,8 @@ async def validate_bearer_key(
     )
 
 
-async def pay_for_request(
-    key: ApiKey,
-    session: AsyncSession,
-    body: dict,
-) -> None:
-    # Use global COST_PER_REQUEST as default, override if model-based pricing is enabled
-    cost_per_request = COST_PER_REQUEST
-    if MODEL_BASED_PRICING and MODELS:
-        cost_per_request = get_max_cost_for_model(model=body["model"])
+async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> None:
+    cost_per_request = get_max_cost_for_model(model=body["model"])
 
     if key.balance < cost_per_request:
         raise HTTPException(
