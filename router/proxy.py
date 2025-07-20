@@ -263,7 +263,10 @@ async def proxy(
                 status_code=400,
                 media_type="application/json",
             )
+
+    # Check token balance for all requests to get currency unit
     unit = check_token_balance(headers, request_body_dict)
+
     # Handle authentication
     if x_cashu := headers.get("x-cashu", None):
         return await x_cashu_handler(request, x_cashu, path)

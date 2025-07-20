@@ -23,9 +23,28 @@ def check_token_balance(headers: dict, body: dict) -> CurrencyUnit:
     if x_cashu := headers.get("x-cashu", None):
         cashu_token = x_cashu
     elif auth := headers.get("authorization", None):
-        cashu_token = auth.split(" ")[1]
+        cashu_token = auth.split(" ")[1] if len(auth.split(" ")) > 1 else ""
     else:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    # Handle empty token
+    if not cashu_token:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": {
+                    "message": "API key or Cashu token required",
+                    "type": "invalid_request_error",
+                    "code": "missing_api_key",
+                }
+            },
+        )
+
+    # Handle regular API keys (sk-*)
+    if cashu_token.startswith("sk-"):
+        # For regular API keys, return default unit
+        return "sat"
+
     cost = get_cost_per_request(model=body.get("model", None))
     if cashu_token.startswith("cashuA"):
         _token = base64_token_json(cashu_token)
