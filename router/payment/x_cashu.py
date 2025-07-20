@@ -95,10 +95,8 @@ async def handle_x_cashu_chat_completion(
         is_streaming = content_str.startswith("data:") or "data:" in content_str
 
         if is_streaming:
-            print("Detected streaming response, processing SSE format")
             return await handle_streaming_response(content_str, response, amount, unit)
         else:
-            print("Detected non-streaming response, processing as JSON")
             return await handle_non_streaming_response(
                 content_str, response, amount, unit
             )
@@ -137,19 +135,16 @@ async def handle_streaming_response(
             except json.JSONDecodeError:
                 continue
 
-    print(f"usage: {usage_data}")
     # If we found usage data, calculate cost and refund
     if usage_data and model:
         response_data = {"usage": usage_data, "model": model}
         try:
             cost_data = await get_cost(response_data)
-            print(f"Refunded {cost_data} msats")
             if cost_data:
                 refund_amount = amount - cost_data.total_msats
                 if refund_amount > 0:
                     refund_token = await send_refund(refund_amount, unit)
                     response.headers["X-Cashu"] = refund_token
-                    print(f"Refunded {refund_amount} msats")
         except Exception as e:
             print(f"Error calculating cost for streaming response: {e}")
 
