@@ -264,11 +264,11 @@ async def proxy(
                 media_type="application/json",
             )
 
+    # Check token balance for all requests to get currency unit
+    unit = check_token_balance(headers, request_body_dict)
+
     # Handle authentication
     if x_cashu := headers.get("x-cashu", None):
-        # Check token balance before authentication for cashu tokens
-        if request_body_dict:
-            check_token_balance(headers, request_body_dict, "msat")
         return await x_cashu_handler(request, x_cashu, path)
 
     elif auth := headers.get("authorization", None):
@@ -299,7 +299,7 @@ async def proxy(
     )
 
     if response.status_code != 200 and key.refund_address == "X-CASHU":
-        refund_token = await x_cashu_refund(key, session)
+        refund_token = await x_cashu_refund(key, session, unit)
         response = Response(
             content=json.dumps(
                 {
@@ -318,7 +318,7 @@ async def proxy(
         return response
 
     if key.refund_address == "X-CASHU":
-        refund_token = await x_cashu_refund(key, session)
+        refund_token = await x_cashu_refund(key, session, unit)
         response.headers["X-Cashu"] = refund_token
 
     return response

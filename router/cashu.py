@@ -4,7 +4,7 @@ import time
 from typing import cast
 
 from sixty_nuts import Wallet
-from sixty_nuts.mint import CurrencyUnit
+from sixty_nuts.types import CurrencyUnit
 from sqlmodel import col, func, select, update
 
 from .db import ApiKey, AsyncSession, get_session
@@ -17,7 +17,6 @@ PAYOUT_INTERVAL = int(os.environ.get("PAYOUT_INTERVAL", 300))  # Default 5 minut
 DEV_LN_ADDRESS = "routstr@minibits.cash"
 DEVS_DONATION_RATE = float(os.environ.get("DEVS_DONATION_RATE", 0.021))  # 2.1%
 NSEC = os.environ["NSEC"]  # Nostr private key for the wallet
-CURRENCY = cast(CurrencyUnit, os.environ.get("CURRENCY", "sat"))
 
 wallet_instance: Wallet | None = None
 
@@ -98,16 +97,19 @@ async def periodic_payout() -> None:
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
     """Redeem a Cashu token and credit the amount to the API key balance."""
     try:
-        amount_sats, _ = await wallet().redeem(cashu_token)
+        amount, unit = await wallet().redeem(cashu_token)
     except Exception as e:
         print(f"Error in credit_balance: {e}")
         # Ensure the balance cannot become negative if redeem fails
         return 0
 
-    if amount_sats <= 0:
+    if amount <= 0:
         return 0
 
-    amount_msats = amount_sats * 1000
+    if unit == "msat":
+        amount_msats = amount
+    else:
+        amount_msats = amount * 1000
 
     # Apply the balance change atomically to avoid race conditions when topping
     # up the same key concurrently.
@@ -193,14 +195,15 @@ async def refund_balance(amount_msats: int, key: ApiKey, session: AsyncSession) 
     return await wallet().send_to_lnurl(key.refund_address, amount=amount_sats)
 
 
-async def x_cashu_refund(key: ApiKey, session: AsyncSession) -> str:
-    refund_token = await wallet().send(key.balance)
+async def x_cashu_refund(key: ApiKey, session: AsyncSession, unit: CurrencyUnit) -> str:
+    refund_token = await wallet().send(key.balance, unit=unit)
     await session.delete(key)
     await session.commit()
     return refund_token
 
 
 async def redeem(cashu_token: str, lnurl: str) -> int:
-    amount_sats, _ = await wallet().redeem(cashu_token)
-    await wallet().send_to_lnurl(lnurl, amount=amount_sats)
-    return amount_sats
+    amount, unit = await wallet().redeem(cashu_token)
+    unit = cast(CurrencyUnit, unit)
+    await wallet().send_to_lnurl(lnurl, amount=amount, unit=unit)
+    return amount

@@ -1,37 +1,58 @@
 import base64
 import json
 import os
-from typing import Literal
 
 import cbor2
 from fastapi import HTTPException, Response
+from sixty_nuts.types import CurrencyUnit
 
 from router.models import MODELS
-from router.payment.cost_caculation import COST_PER_REQUEST
+from router.payment.cost_caculation import COST_PER_REQUEST, MODEL_BASED_PRICING
 
 UPSTREAM_BASE_URL = os.environ["UPSTREAM_BASE_URL"]
 UPSTREAM_API_KEY = os.environ.get("UPSTREAM_API_KEY", "")
 
 
-def check_token_balance(
-    headers: dict, body: dict, unit: Literal["sat", "msat"]
-) -> None:
+def get_cost_per_request(model: str | None = None) -> int:
+    if MODEL_BASED_PRICING and MODELS and model:
+        return get_max_cost_for_model(model=model)
+    return COST_PER_REQUEST
+
+
+def check_token_balance(headers: dict, body: dict) -> CurrencyUnit:
     if x_cashu := headers.get("x-cashu", None):
         cashu_token = x_cashu
     elif auth := headers.get("authorization", None):
-        cashu_token = auth.split(" ")[1]
+        cashu_token = auth.split(" ")[1] if len(auth.split(" ")) > 1 else ""
     else:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    COST_PER_REQUEST = get_max_cost_for_model(model=body["model"])
+
+    # Handle empty token
+    if not cashu_token:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "error": {
+                    "message": "API key or Cashu token required",
+                    "type": "invalid_request_error",
+                    "code": "missing_api_key",
+                }
+            },
+        )
+
+    # Handle regular API keys (sk-*)
+    if cashu_token.startswith("sk-"):
+        # For regular API keys, return default unit
+        return "sat"
+
+    cost = get_cost_per_request(model=body.get("model", None))
     if cashu_token.startswith("cashuA"):
         _token = base64_token_json(cashu_token)
         amount = sum(p["amount"] for t in _token["token"] for p in t["proofs"])
-        unit = _token["unit"]
-        if unit == "msat":
-            pass
-        elif unit == "sat":
+        unit: CurrencyUnit = _token["unit"]
+        if unit == "sat":
             amount *= 1000
-        if amount < COST_PER_REQUEST:
+        if amount < cost:
             raise HTTPException(status_code=413, detail="Insufficient balance")
     elif cashu_token.startswith("cashuB"):
         _token = base64_token_cbor(cashu_token)
@@ -39,10 +60,11 @@ def check_token_balance(
         unit = _token["u"]
         if unit == "sat":
             amount *= 1000
-        if amount < COST_PER_REQUEST:
+        if amount < cost:
             raise HTTPException(status_code=413, detail="Insufficient balance")
     else:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    return unit
 
 
 def base64_token_json(cashu_token: str) -> dict:
@@ -66,6 +88,8 @@ def base64_token_cbor(cashu_token: str) -> dict:
 
 
 def get_max_cost_for_model(model: str) -> int:
+    if not MODEL_BASED_PRICING or not MODELS:
+        return COST_PER_REQUEST
     if model not in [model.id for model in MODELS]:
         return COST_PER_REQUEST
     for m in MODELS:

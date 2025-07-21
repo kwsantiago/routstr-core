@@ -5,6 +5,7 @@ from typing import AsyncGenerator, Literal, cast
 import httpx
 from fastapi import BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
+from sixty_nuts.types import CurrencyUnit
 
 from router.cashu import wallet
 from router.payment.cost_caculation import (
@@ -25,13 +26,13 @@ async def x_cashu_handler(
     request: Request, x_cashu_token: str, path: str
 ) -> Response | StreamingResponse:
     headers = dict(request.headers)
-    amount, _ = await redeem_token(x_cashu_token)
+    amount, unit = await redeem_token(x_cashu_token)
     headers = prepare_upstream_headers(dict(request.headers))
-    return await forward_to_upstream(request, path, headers, amount)
+    return await forward_to_upstream(request, path, headers, amount, unit)
 
 
 async def forward_to_upstream(
-    request: Request, path: str, headers: dict, amount: int
+    request: Request, path: str, headers: dict, amount: int, unit: CurrencyUnit
 ) -> Response | StreamingResponse:
     """Forward request to upstream and handle the response."""
     if path.startswith("v1/"):
@@ -55,7 +56,7 @@ async def forward_to_upstream(
             )
 
             if path.endswith("chat/completions"):
-                result = await handle_x_cashu_chat_completion(response, amount)
+                result = await handle_x_cashu_chat_completion(response, amount, unit)
                 background_tasks = BackgroundTasks()
                 background_tasks.add_task(response.aclose)
                 result.background = background_tasks
@@ -85,7 +86,7 @@ async def forward_to_upstream(
 
 
 async def handle_x_cashu_chat_completion(
-    response: httpx.Response, amount: int
+    response: httpx.Response, amount: int, unit: CurrencyUnit
 ) -> StreamingResponse | Response:
     """Handle both streaming and non-streaming chat completion responses with token-based pricing."""
     try:
@@ -94,11 +95,11 @@ async def handle_x_cashu_chat_completion(
         is_streaming = content_str.startswith("data:") or "data:" in content_str
 
         if is_streaming:
-            print("Detected streaming response, processing SSE format")
-            return await handle_streaming_response(content_str, response, amount)
+            return await handle_streaming_response(content_str, response, amount, unit)
         else:
-            print("Detected non-streaming response, processing as JSON")
-            return await handle_non_streaming_response(content_str, response, amount)
+            return await handle_non_streaming_response(
+                content_str, response, amount, unit
+            )
 
     except Exception as e:
         print(f"Error processing chat completion response: {e}")
@@ -111,7 +112,7 @@ async def handle_x_cashu_chat_completion(
 
 
 async def handle_streaming_response(
-    content_str: str, response: httpx.Response, amount: int
+    content_str: str, response: httpx.Response, amount: int, unit: CurrencyUnit
 ) -> StreamingResponse:
     """Handle Server-Sent Events (SSE) streaming response."""
     # For streaming responses, we'll extract the final usage data
@@ -134,19 +135,16 @@ async def handle_streaming_response(
             except json.JSONDecodeError:
                 continue
 
-    print(f"usage: {usage_data}")
     # If we found usage data, calculate cost and refund
     if usage_data and model:
         response_data = {"usage": usage_data, "model": model}
         try:
             cost_data = await get_cost(response_data)
-            print(f"Refunded {cost_data} msats")
             if cost_data:
                 refund_amount = amount - cost_data.total_msats
                 if refund_amount > 0:
-                    refund_token = await send_refund(refund_amount)
+                    refund_token = await send_refund(refund_amount, unit)
                     response.headers["X-Cashu"] = refund_token
-                    print(f"Refunded {refund_amount} msats")
         except Exception as e:
             print(f"Error calculating cost for streaming response: {e}")
 
@@ -169,7 +167,7 @@ async def handle_streaming_response(
 
 
 async def handle_non_streaming_response(
-    content_str: str, response: httpx.Response, amount: int
+    content_str: str, response: httpx.Response, amount: int, unit: CurrencyUnit
 ) -> Response:
     """Handle regular JSON response."""
     try:
@@ -201,7 +199,7 @@ async def handle_non_streaming_response(
         refund_amount = amount - cost_data.total_msats
         print("refund: ", refund_amount)
         if refund_amount > 0:
-            refund_token = await send_refund(refund_amount)
+            refund_token = await send_refund(refund_amount, unit)
             response.headers["X-Cashu"] = refund_token
             print(f"Refunded {refund_amount} msats")
 
@@ -266,9 +264,9 @@ async def redeem_token(x_cashu_token: str) -> tuple[int, Literal["sat", "msat"]]
         )
 
 
-async def send_refund(amount: int) -> str:
+async def send_refund(amount: int, unit: CurrencyUnit, mint: str | None = None) -> str:
     try:
-        return await wallet().send(amount)
+        return await wallet().send(amount, unit=unit, mint_url=mint)
     except Exception as e:
         raise HTTPException(
             status_code=401,

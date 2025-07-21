@@ -76,6 +76,7 @@ async def refund_wallet_endpoint(
                 status_code=400, detail="Balance too small to refund (less than 1 sat)"
             )
 
+        # TODO: choose currency and mint based on what user has configured
         token = await wallet().send(remaining_balance_sats)
 
         result = {"msats": remaining_balance_msats, "recipient": None, "token": token}
