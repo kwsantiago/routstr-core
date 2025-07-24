@@ -101,15 +101,23 @@ async def handle_non_streaming_chat_completion(
         cost_data = await adjust_payment_for_tokens(key, response_json, session)
         response_json["cost"] = cost_data
 
-        response_headers = dict(response.headers)
+        # Keep only standard headers that are safe to pass through
+        allowed_headers = {
+            "content-type",
+            "cache-control",
+            "date",
+            "vary",
+            "access-control-allow-origin",
+            "access-control-allow-methods",
+            "access-control-allow-headers",
+            "access-control-allow-credentials",
+            "access-control-expose-headers",
+            "access-control-max-age",
+        }
 
-        # Remove Transfer-Encoding header to avoid conflict with Content-Length header in common nginx setups
-        if "transfer-encoding" in response_headers:
-            del response_headers["transfer-encoding"]
-
-        # Remove Content-Encoding header since we're sending uncompressed JSON
-        if "content-encoding" in response_headers:
-            del response_headers["content-encoding"]
+        response_headers = {
+            k: v for k, v in response.headers.items() if k.lower() in allowed_headers
+        }
 
         return Response(
             content=json.dumps(response_json).encode(),
@@ -170,9 +178,19 @@ async def forward_to_upstream(
 
         # For chat completions, we need to handle token-based pricing
         if path.endswith("chat/completions"):
+            # Check if client requested streaming
+            client_wants_streaming = False
+            if request_body:
+                try:
+                    request_data = json.loads(request_body)
+                    client_wants_streaming = request_data.get("stream", False)
+                except json.JSONDecodeError:
+                    pass
+
             # Handle both streaming and non-streaming responses
             content_type = response.headers.get("content-type", "")
-            is_streaming = "text/event-stream" in content_type
+            upstream_is_streaming = "text/event-stream" in content_type
+            is_streaming = client_wants_streaming and upstream_is_streaming
 
             if is_streaming and response.status_code == 200:
                 # Process streaming response and extract cost from the last chunk
@@ -183,7 +201,7 @@ async def forward_to_upstream(
                 result.background = background_tasks
                 return result
 
-            elif response.status_code == 200 and "application/json" in content_type:
+            elif response.status_code == 200:
                 # Handle non-streaming response
                 try:
                     return await handle_non_streaming_chat_completion(
