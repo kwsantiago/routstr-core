@@ -9,7 +9,6 @@ from fastapi.responses import Response, StreamingResponse
 
 from router.payment.helpers import (
     UPSTREAM_BASE_URL,
-    check_token_balance,
     create_error_response,
     prepare_upstream_headers,
 )
@@ -21,7 +20,6 @@ from .auth import (
     revert_pay_for_request,
     validate_bearer_key,
 )
-from .cashu import x_cashu_refund
 from .db import ApiKey, AsyncSession, create_session, get_session
 
 proxy_router = APIRouter()
