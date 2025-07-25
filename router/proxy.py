@@ -15,7 +15,12 @@ from router.payment.helpers import (
 )
 from router.payment.x_cashu import x_cashu_handler
 
-from .auth import adjust_payment_for_tokens, pay_for_request, validate_bearer_key
+from .auth import (
+    adjust_payment_for_tokens,
+    pay_for_request,
+    revert_pay_for_request,
+    validate_bearer_key,
+)
 from .cashu import x_cashu_refund
 from .db import ApiKey, AsyncSession, create_session, get_session
 
@@ -305,9 +310,10 @@ async def proxy(
         headers = prepare_upstream_headers(dict(request.headers))
         return await forward_get_to_upstream(request, path, headers)
 
+    cost_per_request = 0
     # Only pay for request if we have request body data (for completions endpoints)
     if request_body_dict:
-        await pay_for_request(key, session, request_body_dict)
+        cost_per_request = await pay_for_request(key, session, request_body_dict)
 
     # Prepare headers for upstream
     headers = prepare_upstream_headers(dict(request.headers))
@@ -317,7 +323,9 @@ async def proxy(
         request, path, headers, request_body, key, session
     )
 
-    if response.status_code != 200 and key.refund_address == "X-CASHU":
+    if response.status_code != 200:
+        await revert_pay_for_request(key, session, cost_per_request)
+
         refund_token = await x_cashu_refund(key, session, unit)
         response = Response(
             content=json.dumps(
