@@ -288,9 +288,6 @@ async def proxy(
                 media_type="application/json",
             )
 
-    # Check token balance for all requests to get currency unit
-    unit = check_token_balance(headers, request_body_dict)
-
     # Handle authentication
     if x_cashu := headers.get("x-cashu", None):
         return await x_cashu_handler(request, x_cashu, path)
@@ -325,28 +322,6 @@ async def proxy(
 
     if response.status_code != 200:
         await revert_pay_for_request(key, session, cost_per_request)
-
-        refund_token = await x_cashu_refund(key, session, unit)
-        response = Response(
-            content=json.dumps(
-                {
-                    "error": {
-                        "message": "Error forwarding request to upstream",
-                        "type": "upstream_error",
-                        "code": response.status_code,
-                        "refund_token": refund_token,
-                    }
-                }
-            ),
-            status_code=response.status_code,
-            media_type="application/json",
-        )
-        response.headers["X-Cashu"] = refund_token
-        return response
-
-    if key.refund_address == "X-CASHU":
-        refund_token = await x_cashu_refund(key, session, unit)
-        response.headers["X-Cashu"] = refund_token
 
     return response
 
