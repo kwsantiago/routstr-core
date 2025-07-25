@@ -273,7 +273,8 @@ async def proxy(
     if request_body:
         try:
             request_body_dict = json.loads(request_body)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            print(f"Error: failed to parse request body '{e}'")
             return Response(
                 content=json.dumps(
                     {"error": {"type": "invalid_request_error", "code": "invalid_json"}}
@@ -355,11 +356,13 @@ async def get_bearer_token_key(
         try:
             key_expiry_time = int(key_expiry_time)  # type: ignore
         except ValueError:
+            print("Invalid Key-Expiry-Time: must be a valid Unix timestamp")
             raise HTTPException(
                 status_code=400,
                 detail="Invalid Key-Expiry-Time: must be a valid Unix timestamp",
             )
         if not refund_address:
+            print("Error: Refund-LNURL header required when using Key-Expiry-Time")
             raise HTTPException(
                 status_code=400,
                 detail="Error: Refund-LNURL header required when using Key-Expiry-Time",
