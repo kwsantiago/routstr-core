@@ -57,7 +57,7 @@ async def forward_to_upstream(
 
             if response.status_code != 200:
                 refund_token = await send_refund(amount, unit)
-                response = Response(
+                error_response = Response(
                     content=json.dumps(
                         {
                             "error": {
@@ -71,8 +71,9 @@ async def forward_to_upstream(
                     status_code=response.status_code,
                     media_type="application/json",
                 )
-                response.headers["X-Cashu"] = refund_token
-                return response
+                error_response.headers["X-Cashu"] = refund_token
+                return error_response
+
             if path.endswith("chat/completions"):
                 result = await handle_x_cashu_chat_completion(response, amount, unit)
                 background_tasks = BackgroundTasks()
