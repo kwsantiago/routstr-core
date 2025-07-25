@@ -273,8 +273,8 @@ async def proxy(
     if request_body:
         try:
             request_body_dict = json.loads(request_body)
-        except json.JSONDecodeError:
-            print(f"Error: failed to parse request body '{request_body}'")
+        except json.JSONDecodeError as e:
+            print(f"Error: failed to parse request body '{e}'")
             return Response(
                 content=json.dumps(
                     {"error": {"type": "invalid_request_error", "code": "invalid_json"}}
