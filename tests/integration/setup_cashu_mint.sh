@@ -23,9 +23,9 @@ docker run -d \
     -e MINT_BACKEND_BOLT11_SAT=FakeWallet \
     -e MINT_LISTEN_HOST=0.0.0.0 \
     -e MINT_LISTEN_PORT=3338 \
-    -e MINT_PRIVATE_KEY=supersecretprivatekey \
+    -e MINT_PRIVATE_KEY="$(openssl rand -hex 32)" \
     cashubtc/nutshell:latest \
-    mint
+    python -m cashu.mint
 
 # Wait for mint to be ready
 echo "Waiting for Cashu mint to be ready..."
