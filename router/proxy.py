@@ -107,6 +107,7 @@ async def handle_streaming_chat_completion(
                                             extra={
                                                 "key_hash": key.hashed_key[:8] + "...",
                                                 "cost_data": cost_data,
+                                                "balance_after_adjustment": fresh_key.balance,
                                             },
                                         )
                                         # Format as SSE and yield
@@ -177,6 +178,7 @@ async def handle_non_streaming_chat_completion(
                 "key_hash": key.hashed_key[:8] + "...",
                 "cost_data": cost_data,
                 "model": response_json.get("model", "unknown"),
+                "balance_after_adjustment": key.balance,
             },
         )
 
@@ -545,6 +547,7 @@ async def proxy(
                     "path": path,
                     "key_hash": key.hashed_key[:8] + "...",
                     "key_balance_after": key.balance,
+                    "model": request_body_dict.get("model", "unknown"),
                 },
             )
         except Exception as e:
@@ -588,6 +591,7 @@ async def proxy(
                     "refund_token_preview": refund_token[:20] + "..."
                     if len(refund_token) > 20
                     else refund_token,
+                    "balance_after_refund": key.balance,
                 },
             )
 
@@ -633,6 +637,7 @@ async def proxy(
                     "refund_token_preview": refund_token[:20] + "..."
                     if len(refund_token) > 20
                     else refund_token,
+                    "balance_after_final_refund": key.balance,
                 },
             )
         except Exception as refund_error:
@@ -651,6 +656,7 @@ async def proxy(
             "path": path,
             "status_code": response.status_code,
             "key_hash": key.hashed_key[:8] + "...",
+            "final_key_balance": key.balance,
         },
     )
 
