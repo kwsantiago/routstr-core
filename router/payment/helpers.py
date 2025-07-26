@@ -319,7 +319,7 @@ def create_error_response(error_type: str, message: str, status_code: int) -> Re
         "Creating error response",
         extra={
             "error_type": error_type,
-            "message": message,
+            "error_message": message,
             "status_code": status_code,
         },
     )
