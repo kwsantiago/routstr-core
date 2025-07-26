@@ -154,6 +154,7 @@ async def handle_streaming_response(
             except json.JSONDecodeError:
                 continue
 
+    response_headers = dict(response.headers)
     # If we found usage data, calculate cost and refund
     if usage_data and model:
         response_data = {"usage": usage_data, "model": model}
@@ -163,11 +164,10 @@ async def handle_streaming_response(
                 refund_amount = amount - cost_data.total_msats
                 if refund_amount > 0:
                     refund_token = await send_refund(refund_amount, unit)
-                    response.headers["X-Cashu"] = refund_token
+                    response_headers["X-Cashu"] = refund_token
         except Exception as e:
             print(f"Error calculating cost for streaming response: {e}")
 
-    response_headers = dict(response.headers)
     if "transfer-encoding" in response_headers:
         del response_headers["transfer-encoding"]
     if "content-encoding" in response_headers:
@@ -219,7 +219,7 @@ async def handle_non_streaming_response(
         print("refund: ", refund_amount)
         if refund_amount > 0:
             refund_token = await send_refund(refund_amount, unit)
-            response.headers["X-Cashu"] = refund_token
+            response_headers["X-Cashu"] = refund_token
             print(f"Refunded {refund_amount} msats")
 
         return Response(
