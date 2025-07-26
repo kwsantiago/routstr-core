@@ -3,6 +3,7 @@ import os
 import re
 import tomllib
 from pathlib import Path
+
 from pythonjsonlogger import jsonlogger
 
 
@@ -68,8 +69,8 @@ class SecurityFilter(logging.Filter):
                     patterns = [
                         rf"{key}[:\s=]+([a-zA-Z0-9_\-\.]+)",  # key: value or key=value
                         rf'{key}[:\s=]+["\']([^"\']+)["\']',  # key: "value" or key='value'
-                        rf"Bearer\s+([a-zA-Z0-9_\-\.]+)",  # Bearer token
-                        rf"cashu[A-Z]+([a-zA-Z0-9_\-\.=/+]+)",  # Cashu tokens
+                        r"Bearer\s+([a-zA-Z0-9_\-\.]+)",  # Bearer token
+                        r"cashu[A-Z]+([a-zA-Z0-9_\-\.=/+]+)",  # Cashu tokens
                     ]
 
                     for pattern in patterns:

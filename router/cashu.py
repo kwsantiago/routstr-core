@@ -516,6 +516,7 @@ async def redeem(cashu_token: str, lnurl: str) -> int:
                 "amount": amount,
                 "unit": unit,
                 "lnurl_preview": lnurl[:20] + "..." if len(lnurl) > 20 else lnurl,
+                "transaction_result": str(result),
             },
         )
 

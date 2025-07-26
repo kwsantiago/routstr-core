@@ -259,6 +259,13 @@ async def handle_streaming_response(
         },
     )
 
+    # Initialize response headers early so they can be modified during processing
+    response_headers = dict(response.headers)
+    if "transfer-encoding" in response_headers:
+        del response_headers["transfer-encoding"]
+    if "content-encoding" in response_headers:
+        del response_headers["content-encoding"]
+
     # For streaming responses, we'll extract the final usage data
     # and calculate cost based on that
     usage_data = None
@@ -341,12 +348,6 @@ async def handle_streaming_response(
                     "unit": unit,
                 },
             )
-
-    response_headers = dict(response.headers)
-    if "transfer-encoding" in response_headers:
-        del response_headers["transfer-encoding"]
-    if "content-encoding" in response_headers:
-        del response_headers["content-encoding"]
 
     async def generate() -> AsyncGenerator[bytes, None]:
         for line in lines:
