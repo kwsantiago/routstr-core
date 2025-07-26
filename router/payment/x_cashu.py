@@ -286,6 +286,7 @@ async def handle_streaming_response(
             except json.JSONDecodeError:
                 continue
 
+    response_headers = dict(response.headers)
     # If we found usage data, calculate cost and refund
     if usage_data and model:
         logger.debug(
