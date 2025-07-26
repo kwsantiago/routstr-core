@@ -16,7 +16,8 @@ compose.override.yml
 .coverage
 
 # Logging
-logs/
+logs/*
+!logs/.gitkeep
 *.log
 
 # deployment
