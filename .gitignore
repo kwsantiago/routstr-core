@@ -15,5 +15,9 @@ compose.override.yml
 # Coverage
 .coverage
 
-# deployment
+# Logging
+logs/
 *.log
+
+# deployment
+proof_backups
