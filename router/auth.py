@@ -6,7 +6,7 @@ from sqlmodel import col, update
 
 from .cashu import credit_balance
 from .db import ApiKey, AsyncSession
-from .logging_config import get_logger
+from .logging.logging_config import get_logger
 from .payment.cost_caculation import (
     CostData,
     CostDataError,

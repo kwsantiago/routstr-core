@@ -7,7 +7,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
-from router.logging_config import get_logger
+from router.logging.logging_config import get_logger
 from router.payment.helpers import (
     UPSTREAM_BASE_URL,
     check_token_balance,

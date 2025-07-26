@@ -2,7 +2,7 @@ import os
 
 from pydantic import BaseModel
 
-from router.logging_config import get_logger
+from router.logging.logging_config import get_logger
 from router.models import MODELS
 
 logger = get_logger(__name__)

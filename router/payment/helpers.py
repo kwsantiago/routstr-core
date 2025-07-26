@@ -6,7 +6,7 @@ import cbor2
 from fastapi import HTTPException, Response
 from sixty_nuts.types import CurrencyUnit
 
-from router.logging_config import get_logger
+from router.logging.logging_config import get_logger
 from router.models import MODELS
 from router.payment.cost_caculation import COST_PER_REQUEST, MODEL_BASED_PRICING
 

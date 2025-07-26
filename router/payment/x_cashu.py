@@ -8,7 +8,7 @@ from fastapi.responses import Response, StreamingResponse
 from sixty_nuts.types import CurrencyUnit
 
 from router.cashu import wallet
-from router.logging_config import get_logger
+from router.logging.logging_config import get_logger
 from router.payment.cost_caculation import (
     CostData,
     CostDataError,

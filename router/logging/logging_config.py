@@ -1,16 +1,68 @@
 import logging.config
+import logging.handlers
 import os
 import re
 import tomllib
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from pythonjsonlogger import jsonlogger
+
+
+class DailyRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
+    """Custom TimedRotatingFileHandler that creates date-based filenames."""
+
+    def __init__(self, filename: str, **kwargs: Any) -> None:
+        """Initialize with a base filename pattern."""
+        self.base_dir = os.path.dirname(filename)
+        self.base_name = os.path.basename(filename).replace(".log", "")
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        self.current_date = today
+        dated_filename = os.path.join(self.base_dir, f"{self.base_name}_{today}.log")
+
+        super().__init__(dated_filename, **kwargs)
+
+    def doRollover(self) -> None:
+        """Override rollover to create new date-based filename."""
+        if self.stream:
+            self.stream.close()
+
+        new_date = datetime.now().strftime("%Y-%m-%d")
+        new_filename = os.path.join(self.base_dir, f"{self.base_name}_{new_date}.log")
+
+        self.baseFilename = new_filename
+        self.current_date = new_date
+
+        # FIX ME: not sure if we need this
+        # self._cleanup_old_files()
+
+        if not self.delay:
+            self.stream = self._open()
+
+    def _cleanup_old_files(self) -> None:
+        """Remove old log files beyond backupCount."""
+        if self.backupCount > 0:
+            log_files = []
+            if os.path.exists(self.base_dir):
+                for file in os.listdir(self.base_dir):
+                    if file.startswith(f"{self.base_name}_") and file.endswith(".log"):
+                        file_path = os.path.join(self.base_dir, file)
+                        log_files.append((file_path, os.path.getmtime(file_path)))
+
+            log_files.sort(key=lambda x: x[1], reverse=True)
+
+            for file_path, _ in log_files[self.backupCount :]:
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
 
 
 def get_package_version() -> str:
     """Read the package version from pyproject.toml."""
     try:
-        # Get the path to pyproject.toml (assuming it's in the project root)
         pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
 
         with open(pyproject_path, "rb") as f:
@@ -19,7 +71,6 @@ def get_package_version() -> str:
         version = pyproject_data.get("project", {}).get("version", "unknown")
         return version
     except Exception:
-        # Fallback if we can't read the version
         return "unknown"
 
 
@@ -58,14 +109,10 @@ class SecurityFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         """Filter out sensitive information from log records."""
         try:
-            # Get the formatted message
             message = record.getMessage()
 
-            # Simple redaction - replace anything that looks like sensitive data
             for key in self.SENSITIVE_KEYS:
                 if key in message.lower():
-                    # Use regex to find and redact sensitive patterns
-                    # This looks for the key followed by optional characters and captures sensitive data
                     patterns = [
                         rf"{key}[:\s=]+([a-zA-Z0-9_\-\.]+)",  # key: value or key=value
                         rf'{key}[:\s=]+["\']([^"\']+)["\']',  # key: "value" or key='value'
@@ -78,13 +125,10 @@ class SecurityFilter(logging.Filter):
                             pattern, f"{key}: [REDACTED]", message, flags=re.IGNORECASE
                         )
 
-            # Update the record message
             record.msg = message
-            record.args = ()  # Clear args since we've formatted the message
+            record.args = ()
 
         except Exception:
-            # If anything goes wrong with filtering, just pass through the original record
-            # We don't want logging to break the application
             pass
 
         return True
@@ -129,12 +173,14 @@ def setup_logging() -> None:
                 "filters": ["version_filter", "security_filter"],
             },
             "file": {
-                "class": "logging.handlers.RotatingFileHandler",
+                "()": DailyRotatingFileHandler,
                 "level": log_level,
                 "formatter": "json",
                 "filename": "logs/app.log",
-                "maxBytes": 10485760,  # 10MB
-                "backupCount": 5,
+                "when": "midnight",  # Rotate at midnight each day
+                "interval": 1,  # Every 1 day
+                "backupCount": 30,  # Keep 30 days of logs
+                "atTime": None,  # Rotate at midnight (00:00)
                 "filters": ["version_filter", "security_filter"],
             },
         },
@@ -184,7 +230,6 @@ def setup_logging() -> None:
         "root": {"level": log_level, "handlers": ["console"]},
     }
 
-    # Create logs directory if it doesn't exist
     os.makedirs("logs", exist_ok=True)
 
     logging.config.dictConfig(LOGGING_CONFIG)
