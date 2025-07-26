@@ -63,13 +63,26 @@ class DailyRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
 def get_package_version() -> str:
     """Read the package version from pyproject.toml."""
     try:
-        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        # Find project root by looking for pyproject.toml
+        current_path = Path(__file__).parent
+        while current_path != current_path.parent:
+            pyproject_path = current_path / "pyproject.toml"
+            if pyproject_path.exists():
+                with open(pyproject_path, "rb") as f:
+                    pyproject_data = tomllib.load(f)
+                version = pyproject_data.get("project", {}).get("version", "unknown")
+                return version
+            current_path = current_path.parent
 
-        with open(pyproject_path, "rb") as f:
-            pyproject_data = tomllib.load(f)
+        # Fallback: try the simple path resolution (3 levels up for router/logging/logging_config.py)
+        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+        if pyproject_path.exists():
+            with open(pyproject_path, "rb") as f:
+                pyproject_data = tomllib.load(f)
+            version = pyproject_data.get("project", {}).get("version", "unknown")
+            return version
 
-        version = pyproject_data.get("project", {}).get("version", "unknown")
-        return version
+        return "unknown"
     except Exception:
         return "unknown"
 
