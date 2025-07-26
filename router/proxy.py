@@ -9,6 +9,7 @@ from fastapi.responses import Response, StreamingResponse
 
 from router.payment.helpers import (
     UPSTREAM_BASE_URL,
+    check_token_balance,
     create_error_response,
     prepare_upstream_headers,
 )
@@ -285,6 +286,8 @@ async def proxy(
                 status_code=400,
                 media_type="application/json",
             )
+    # Check token balance for all requests to get currency unit
+    _ = check_token_balance(headers, request_body_dict)
 
     # Handle authentication
     if x_cashu := headers.get("x-cashu", None):
