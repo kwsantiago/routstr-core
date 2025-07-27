@@ -578,40 +578,64 @@ async def send_refund(amount: int, unit: CurrencyUnit, mint: str | None = None) 
         "Creating refund token", extra={"amount": amount, "unit": unit, "mint": mint}
     )
 
-    try:
-        refund_token = await wallet().send(amount, unit=unit, mint_url=mint)
+    max_retries = 3
+    last_exception = None
 
-        logger.info(
-            "Refund token created successfully",
-            extra={
-                "amount": amount,
-                "unit": unit,
-                "mint": mint,
-                "token_preview": refund_token[:20] + "..."
-                if len(refund_token) > 20
-                else refund_token,
-            },
-        )
+    for attempt in range(max_retries):
+        try:
+            refund_token = await wallet().send(amount, unit=unit, mint_url=mint)
 
-        return refund_token
-    except Exception as e:
-        logger.error(
-            "Failed to create refund token",
-            extra={
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "amount": amount,
-                "unit": unit,
-                "mint": mint,
-            },
-        )
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "error": {
-                    "message": f"failed to create refund: {str(e)}",
-                    "type": "invalid_request_error",
-                    "code": "send_token_failed",
-                }
-            },
-        )
+            logger.info(
+                "Refund token created successfully",
+                extra={
+                    "amount": amount,
+                    "unit": unit,
+                    "mint": mint,
+                    "attempt": attempt + 1,
+                    "token_preview": refund_token[:20] + "..."
+                    if len(refund_token) > 20
+                    else refund_token,
+                },
+            )
+
+            return refund_token
+        except Exception as e:
+            last_exception = e
+            if attempt < max_retries - 1:
+                logger.warning(
+                    "Refund token creation failed, retrying",
+                    extra={
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "attempt": attempt + 1,
+                        "max_retries": max_retries,
+                        "amount": amount,
+                        "unit": unit,
+                        "mint": mint,
+                    },
+                )
+            else:
+                logger.error(
+                    "Failed to create refund token after all retries",
+                    extra={
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "attempt": attempt + 1,
+                        "max_retries": max_retries,
+                        "amount": amount,
+                        "unit": unit,
+                        "mint": mint,
+                    },
+                )
+
+    # If we get here, all retries failed
+    raise HTTPException(
+        status_code=401,
+        detail={
+            "error": {
+                "message": f"failed to create refund after {max_retries} attempts: {str(last_exception)}",
+                "type": "invalid_request_error",
+                "code": "send_token_failed",
+            }
+        },
+    )
