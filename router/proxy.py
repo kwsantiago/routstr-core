@@ -16,8 +16,12 @@ from router.payment.helpers import (
 )
 from router.payment.x_cashu import x_cashu_handler
 
-from .auth import adjust_payment_for_tokens, pay_for_request, validate_bearer_key
-from .cashu import x_cashu_refund
+from .auth import (
+    adjust_payment_for_tokens,
+    pay_for_request,
+    revert_pay_for_request,
+    validate_bearer_key,
+)
 from .db import ApiKey, AsyncSession, create_session, get_session
 
 logger = get_logger(__name__)
@@ -527,6 +531,7 @@ async def proxy(
         headers = prepare_upstream_headers(dict(request.headers))
         return await forward_get_to_upstream(request, path, headers)
 
+    cost_per_request = 0
     # Only pay for request if we have request body data (for completions endpoints)
     if request_body_dict:
         logger.info(
@@ -570,9 +575,10 @@ async def proxy(
         request, path, headers, request_body, key, session
     )
 
-    if response.status_code != 200 and key.refund_address == "X-CASHU":
+    if response.status_code != 200:
+        await revert_pay_for_request(key, session, cost_per_request)
         logger.warning(
-            "Upstream request failed, processing X-Cashu refund",
+            "Upstream request failed, revert payment",
             extra={
                 "status_code": response.status_code,
                 "path": path,
@@ -580,85 +586,6 @@ async def proxy(
                 "key_balance": key.balance,
             },
         )
-
-        try:
-            refund_token = await x_cashu_refund(key, session, unit)
-            logger.info(
-                "X-Cashu refund processed for failed request",
-                extra={
-                    "status_code": response.status_code,
-                    "key_hash": key.hashed_key[:8] + "...",
-                    "refund_token_preview": refund_token[:20] + "..."
-                    if len(refund_token) > 20
-                    else refund_token,
-                    "balance_after_refund": key.balance,
-                },
-            )
-
-            response = Response(
-                content=json.dumps(
-                    {
-                        "error": {
-                            "message": "Error forwarding request to upstream",
-                            "type": "upstream_error",
-                            "code": response.status_code,
-                            "refund_token": refund_token,
-                        }
-                    }
-                ),
-                status_code=response.status_code,
-                media_type="application/json",
-            )
-            response.headers["X-Cashu"] = refund_token
-            return response
-        except Exception as refund_error:
-            logger.error(
-                "Failed to process X-Cashu refund",
-                extra={
-                    "error": str(refund_error),
-                    "error_type": type(refund_error).__name__,
-                    "key_hash": key.hashed_key[:8] + "...",
-                },
-            )
-
-    if key.refund_address == "X-CASHU":
-        logger.info(
-            "Processing final X-Cashu refund",
-            extra={"key_hash": key.hashed_key[:8] + "...", "key_balance": key.balance},
-        )
-
-        try:
-            refund_token = await x_cashu_refund(key, session, unit)
-            response.headers["X-Cashu"] = refund_token
-            logger.info(
-                "Final X-Cashu refund processed",
-                extra={
-                    "key_hash": key.hashed_key[:8] + "...",
-                    "refund_token_preview": refund_token[:20] + "..."
-                    if len(refund_token) > 20
-                    else refund_token,
-                    "balance_after_final_refund": key.balance,
-                },
-            )
-        except Exception as refund_error:
-            logger.error(
-                "Failed to process final X-Cashu refund",
-                extra={
-                    "error": str(refund_error),
-                    "error_type": type(refund_error).__name__,
-                    "key_hash": key.hashed_key[:8] + "...",
-                },
-            )
-
-    logger.info(
-        "Proxy request completed",
-        extra={
-            "path": path,
-            "status_code": response.status_code,
-            "key_hash": key.hashed_key[:8] + "...",
-            "final_key_balance": key.balance,
-        },
-    )
 
     return response
 

@@ -241,7 +241,7 @@ async def validate_bearer_key(
 
 async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> None:
     """Process payment for a request."""
-    model = body.get("model", "unknown")
+    model = body["model"]
     cost_per_request = get_max_cost_for_model(model=model)
 
     logger.info(
@@ -336,6 +336,37 @@ async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> Non
             "model": model,
         },
     )
+
+    return cost_per_request
+
+
+async def revert_pay_for_request(
+    key: ApiKey, session: AsyncSession, cost_per_request: int
+) -> None:
+    stmt = (
+        update(ApiKey)
+        .where(col(ApiKey.hashed_key) == key.hashed_key)
+        .values(
+            balance=col(ApiKey.balance) + cost_per_request,
+            total_spent=col(ApiKey.total_spent) - cost_per_request,
+            total_requests=col(ApiKey.total_requests) - 1,
+        )
+    )
+
+    result = await session.exec(stmt)  # type: ignore[call-overload]
+    await session.commit()
+    if result.rowcount == 0:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": {
+                    "message": f"failed to revert request payment: {cost_per_request} mSats required. {key.balance} available.",
+                    "type": "payment_error",
+                    "code": "payment_error",
+                }
+            },
+        )
+    await session.refresh(key)
 
 
 async def adjust_payment_for_tokens(
