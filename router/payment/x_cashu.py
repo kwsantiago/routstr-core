@@ -120,7 +120,7 @@ async def forward_to_upstream(
                     },
                 )
 
-                refund_token = await send_refund(amount, unit)
+                refund_token = await send_refund(amount - 60, unit)
 
                 logger.info(
                     "Refund processed for failed upstream request",
@@ -316,7 +316,7 @@ async def handle_streaming_response(
                         },
                     )
 
-                    refund_token = await send_refund(refund_amount, unit)
+                    refund_token = await send_refund(refund_amount - 60, unit)
                     response_headers["X-Cashu"] = refund_token
 
                     logger.info(
@@ -419,7 +419,7 @@ async def handle_non_streaming_response(
         )
 
         if refund_amount > 0:
-            refund_token = await send_refund(refund_amount, unit)
+            refund_token = await send_refund(refund_amount - 60, unit)
             response_headers["X-Cashu"] = refund_token
 
             logger.info(
