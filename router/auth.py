@@ -239,7 +239,7 @@ async def validate_bearer_key(
     )
 
 
-async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> None:
+async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> int:
     """Process payment for a request."""
     model = body["model"]
     cost_per_request = get_max_cost_for_model(model=model)
