@@ -7,6 +7,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
+from router.logging.logging_config import get_logger
 from router.payment.helpers import (
     UPSTREAM_BASE_URL,
     check_token_balance,
@@ -23,6 +24,7 @@ from .auth import (
 )
 from .db import ApiKey, AsyncSession, create_session, get_session
 
+logger = get_logger(__name__)
 proxy_router = APIRouter()
 
 
@@ -30,6 +32,14 @@ async def handle_streaming_chat_completion(
     response: httpx.Response, key: ApiKey, session: AsyncSession
 ) -> StreamingResponse:
     """Handle streaming chat completion responses with token-based pricing."""
+    logger.info(
+        "Processing streaming chat completion",
+        extra={
+            "key_hash": key.hashed_key[:8] + "...",
+            "key_balance": key.balance,
+            "response_status": response.status_code,
+        },
+    )
 
     async def stream_with_cost() -> AsyncGenerator[bytes, None]:
         # Store all chunks to analyze
@@ -41,6 +51,14 @@ async def handle_streaming_chat_completion(
 
             # Pass through each chunk to client
             yield chunk
+
+        logger.debug(
+            "Streaming completed, analyzing usage data",
+            extra={
+                "key_hash": key.hashed_key[:8] + "...",
+                "chunks_count": len(stored_chunks),
+            },
+        )
 
         # Process stored chunks to find usage data
         # Start from the end and work backwards
@@ -67,6 +85,15 @@ async def handle_streaming_chat_completion(
                             and data["usage"] is not None
                             and isinstance(data["usage"], dict)
                         ):
+                            logger.info(
+                                "Found usage data in streaming response",
+                                extra={
+                                    "key_hash": key.hashed_key[:8] + "...",
+                                    "usage_data": data["usage"],
+                                    "model": data.get("model", "unknown"),
+                                },
+                            )
+
                             # Found usage data, calculate cost
                             # Create a new session for this operation
                             async with create_session() as new_session:
@@ -75,18 +102,43 @@ async def handle_streaming_chat_completion(
                                     key.__class__, key.hashed_key
                                 )
                                 if fresh_key:
-                                    cost_data = await adjust_payment_for_tokens(
-                                        fresh_key, data, new_session
-                                    )
-                                    # Format as SSE and yield
-                                    cost_json = json.dumps({"cost": cost_data})
-                                    yield f"data: {cost_json}\n\n".encode()
+                                    try:
+                                        cost_data = await adjust_payment_for_tokens(
+                                            fresh_key, data, new_session
+                                        )
+                                        logger.info(
+                                            "Token adjustment completed for streaming",
+                                            extra={
+                                                "key_hash": key.hashed_key[:8] + "...",
+                                                "cost_data": cost_data,
+                                                "balance_after_adjustment": fresh_key.balance,
+                                            },
+                                        )
+                                        # Format as SSE and yield
+                                        cost_json = json.dumps({"cost": cost_data})
+                                        yield f"data: {cost_json}\n\n".encode()
+                                    except Exception as cost_error:
+                                        logger.error(
+                                            "Error adjusting payment for streaming tokens",
+                                            extra={
+                                                "error": str(cost_error),
+                                                "error_type": type(cost_error).__name__,
+                                                "key_hash": key.hashed_key[:8] + "...",
+                                            },
+                                        )
                             break
                     except json.JSONDecodeError:
                         continue
 
             except Exception as e:
-                print(f"Error processing streaming response for cost: {e}")
+                logger.error(
+                    "Error processing streaming response chunk",
+                    extra={
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "key_hash": key.hashed_key[:8] + "...",
+                    },
+                )
 
     return StreamingResponse(
         stream_with_cost(),
@@ -99,11 +151,40 @@ async def handle_non_streaming_chat_completion(
     response: httpx.Response, key: ApiKey, session: AsyncSession
 ) -> Response:
     """Handle non-streaming chat completion responses with token-based pricing."""
+    logger.info(
+        "Processing non-streaming chat completion",
+        extra={
+            "key_hash": key.hashed_key[:8] + "...",
+            "key_balance": key.balance,
+            "response_status": response.status_code,
+        },
+    )
+
     try:
         content = await response.aread()
         response_json = json.loads(content)
+
+        logger.debug(
+            "Parsed response JSON",
+            extra={
+                "key_hash": key.hashed_key[:8] + "...",
+                "model": response_json.get("model", "unknown"),
+                "has_usage": "usage" in response_json,
+            },
+        )
+
         cost_data = await adjust_payment_for_tokens(key, response_json, session)
         response_json["cost"] = cost_data
+
+        logger.info(
+            "Token adjustment completed for non-streaming",
+            extra={
+                "key_hash": key.hashed_key[:8] + "...",
+                "cost_data": cost_data,
+                "model": response_json.get("model", "unknown"),
+                "balance_after_adjustment": key.balance,
+            },
+        )
 
         # Keep only standard headers that are safe to pass through
         allowed_headers = {
@@ -130,10 +211,26 @@ async def handle_non_streaming_chat_completion(
             media_type="application/json",
         )
     except json.JSONDecodeError as e:
-        print(f"Failed to parse JSON from upstream response: {e}")
+        logger.error(
+            "Failed to parse JSON from upstream response",
+            extra={
+                "error": str(e),
+                "key_hash": key.hashed_key[:8] + "...",
+                "content_preview": content[:200].decode(errors="ignore")
+                if content
+                else "empty",
+            },
+        )
         raise
     except Exception as e:
-        print(f"Error adjusting payment for tokens: {e}")
+        logger.error(
+            "Error processing non-streaming chat completion",
+            extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "key_hash": key.hashed_key[:8] + "...",
+            },
+        )
         raise
 
 
@@ -150,6 +247,19 @@ async def forward_to_upstream(
         path = path.replace("v1/", "")
 
     url = f"{UPSTREAM_BASE_URL}/{path}"
+
+    logger.info(
+        "Forwarding request to upstream",
+        extra={
+            "url": url,
+            "method": request.method,
+            "path": path,
+            "key_hash": key.hashed_key[:8] + "...",
+            "key_balance": key.balance,
+            "has_request_body": request_body is not None,
+        },
+    )
+
     client = httpx.AsyncClient(
         transport=httpx.AsyncHTTPTransport(retries=1),
         timeout=None,  # No timeout - requests can take as long as needed
@@ -180,6 +290,16 @@ async def forward_to_upstream(
                 stream=True,
             )
 
+        logger.info(
+            "Received upstream response",
+            extra={
+                "status_code": response.status_code,
+                "path": path,
+                "key_hash": key.hashed_key[:8] + "...",
+                "content_type": response.headers.get("content-type", "unknown"),
+            },
+        )
+
         # For chat completions, we need to handle token-based pricing
         if path.endswith("chat/completions"):
             # Check if client requested streaming
@@ -188,13 +308,34 @@ async def forward_to_upstream(
                 try:
                     request_data = json.loads(request_body)
                     client_wants_streaming = request_data.get("stream", False)
+                    logger.debug(
+                        "Chat completion request analysis",
+                        extra={
+                            "client_wants_streaming": client_wants_streaming,
+                            "model": request_data.get("model", "unknown"),
+                            "key_hash": key.hashed_key[:8] + "...",
+                        },
+                    )
                 except json.JSONDecodeError:
-                    pass
+                    logger.warning(
+                        "Failed to parse request body JSON for streaming detection"
+                    )
 
             # Handle both streaming and non-streaming responses
             content_type = response.headers.get("content-type", "")
             upstream_is_streaming = "text/event-stream" in content_type
             is_streaming = client_wants_streaming and upstream_is_streaming
+
+            logger.debug(
+                "Response type analysis",
+                extra={
+                    "is_streaming": is_streaming,
+                    "client_wants_streaming": client_wants_streaming,
+                    "upstream_is_streaming": upstream_is_streaming,
+                    "content_type": content_type,
+                    "key_hash": key.hashed_key[:8] + "...",
+                },
+            )
 
             if is_streaming and response.status_code == 200:
                 # Process streaming response and extract cost from the last chunk
@@ -220,6 +361,15 @@ async def forward_to_upstream(
         background_tasks.add_task(response.aclose)
         background_tasks.add_task(client.aclose)
 
+        logger.debug(
+            "Streaming non-chat response",
+            extra={
+                "path": path,
+                "status_code": response.status_code,
+                "key_hash": key.hashed_key[:8] + "...",
+            },
+        )
+
         return StreamingResponse(
             response.aiter_bytes(),
             status_code=response.status_code,
@@ -231,10 +381,18 @@ async def forward_to_upstream(
         await client.aclose()
         error_type = type(exc).__name__
         error_details = str(exc)
-        print(
-            f"Error forwarding request to upstream: {error_type}: {error_details}\n"
-            f"Request details: method={request.method}, url={url}, headers={headers}, "
-            f"path={path}, query_params={dict(request.query_params)}"
+
+        logger.error(
+            "HTTP request error to upstream",
+            extra={
+                "error_type": error_type,
+                "error_details": error_details,
+                "method": request.method,
+                "url": url,
+                "path": path,
+                "query_params": dict(request.query_params),
+                "key_hash": key.hashed_key[:8] + "...",
+            },
         )
 
         # Provide more specific error messages based on the error type
@@ -251,15 +409,22 @@ async def forward_to_upstream(
 
     except Exception as exc:
         await client.aclose()
-        import traceback
-
         tb = traceback.format_exc()
-        print(
-            f"Unexpected error: {exc}\n"
-            f"Request details: method={request.method}, url={url}, headers={headers}, "
-            f"path={path}, query_params={dict(request.query_params)}\n"
-            f"Traceback:\n{tb}"
+
+        logger.error(
+            "Unexpected error in upstream forwarding",
+            extra={
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+                "method": request.method,
+                "url": url,
+                "path": path,
+                "query_params": dict(request.query_params),
+                "key_hash": key.hashed_key[:8] + "...",
+                "traceback": tb,
+            },
         )
+
         return create_error_response(
             "internal_error", "An unexpected server error occurred", 500
         )
@@ -269,6 +434,17 @@ async def forward_to_upstream(
 async def proxy(
     request: Request, path: str, session: AsyncSession = Depends(get_session)
 ) -> Response | StreamingResponse:
+    """Main proxy endpoint handler."""
+    logger.info(
+        "Received proxy request",
+        extra={
+            "method": request.method,
+            "path": path,
+            "client_host": request.client.host if request.client else "unknown",
+            "user_agent": request.headers.get("user-agent", "unknown")[:100],
+        },
+    )
+
     request_body = await request.body()
     headers = dict(request.headers)
 
@@ -277,8 +453,25 @@ async def proxy(
     if request_body:
         try:
             request_body_dict = json.loads(request_body)
+            logger.debug(
+                "Request body parsed",
+                extra={
+                    "path": path,
+                    "body_keys": list(request_body_dict.keys()),
+                    "model": request_body_dict.get("model", "not_specified"),
+                },
+            )
         except json.JSONDecodeError as e:
-            print(f"Error: failed to parse request body '{e}'")
+            logger.error(
+                "Invalid JSON in request body",
+                extra={
+                    "error": str(e),
+                    "path": path,
+                    "body_preview": request_body[:200].decode(errors="ignore")
+                    if request_body
+                    else "empty",
+                },
+            )
             return Response(
                 content=json.dumps(
                     {"error": {"type": "invalid_request_error", "code": "invalid_json"}}
@@ -288,23 +481,52 @@ async def proxy(
             )
 
     # Check token balance for all requests to get currency unit
-    _ = check_token_balance(headers, request_body_dict)
+    try:
+        unit = check_token_balance(headers, request_body_dict)
+        logger.debug(
+            "Token balance check completed", extra={"path": path, "unit": unit}
+        )
+    except HTTPException as e:
+        logger.warning(
+            "Token balance check failed",
+            extra={"path": path, "status_code": e.status_code, "detail": str(e.detail)},
+        )
+        raise
 
     # Handle authentication
     if x_cashu := headers.get("x-cashu", None):
+        logger.info(
+            "Processing X-Cashu payment",
+            extra={
+                "path": path,
+                "token_preview": x_cashu[:20] + "..." if len(x_cashu) > 20 else x_cashu,
+            },
+        )
         return await x_cashu_handler(request, x_cashu, path)
 
     elif auth := headers.get("authorization", None):
+        logger.debug(
+            "Processing bearer token authentication",
+            extra={
+                "path": path,
+                "token_preview": auth[:20] + "..." if len(auth) > 20 else auth,
+            },
+        )
         key = await get_bearer_token_key(headers, path, session, auth)
 
     else:
         if request.method not in ["GET"]:
+            logger.warning(
+                "Unauthorized request - no authentication provided",
+                extra={"method": request.method, "path": path},
+            )
             return Response(
                 content=json.dumps({"detail": "Unauthorized"}),
                 status_code=401,
                 media_type="application/json",
             )
 
+        logger.debug("Processing unauthenticated GET request", extra={"path": path})
         # Prepare headers for upstream
         headers = prepare_upstream_headers(dict(request.headers))
         return await forward_get_to_upstream(request, path, headers)
@@ -312,7 +534,38 @@ async def proxy(
     cost_per_request = 0
     # Only pay for request if we have request body data (for completions endpoints)
     if request_body_dict:
-        cost_per_request = await pay_for_request(key, session, request_body_dict)
+        logger.info(
+            "Processing payment for request",
+            extra={
+                "path": path,
+                "key_hash": key.hashed_key[:8] + "...",
+                "key_balance_before": key.balance,
+                "model": request_body_dict.get("model", "unknown"),
+            },
+        )
+
+        try:
+            await pay_for_request(key, session, request_body_dict)
+            logger.info(
+                "Payment processed successfully",
+                extra={
+                    "path": path,
+                    "key_hash": key.hashed_key[:8] + "...",
+                    "key_balance_after": key.balance,
+                    "model": request_body_dict.get("model", "unknown"),
+                },
+            )
+        except Exception as e:
+            logger.error(
+                "Payment processing failed",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "path": path,
+                    "key_hash": key.hashed_key[:8] + "...",
+                },
+            )
+            raise
 
     # Prepare headers for upstream
     headers = prepare_upstream_headers(dict(request.headers))
@@ -324,6 +577,15 @@ async def proxy(
 
     if response.status_code != 200:
         await revert_pay_for_request(key, session, cost_per_request)
+        logger.warning(
+            "Upstream request failed, revert payment",
+            extra={
+                "status_code": response.status_code,
+                "path": path,
+                "key_hash": key.hashed_key[:8] + "...",
+                "key_balance": key.balance,
+            },
+        )
 
     return response
 
@@ -336,18 +598,40 @@ async def get_bearer_token_key(
     refund_address = headers.get("Refund-LNURL", None)
     key_expiry_time = headers.get("Key-Expiry-Time", None)
 
+    logger.debug(
+        "Processing bearer token",
+        extra={
+            "path": path,
+            "has_refund_address": bool(refund_address),
+            "has_expiry_time": bool(key_expiry_time),
+            "bearer_key_preview": bearer_key[:20] + "..."
+            if len(bearer_key) > 20
+            else bearer_key,
+        },
+    )
+
     # Validate key_expiry_time header
     if key_expiry_time:
         try:
             key_expiry_time = int(key_expiry_time)  # type: ignore
+            logger.debug(
+                "Key expiry time validated",
+                extra={"expiry_time": key_expiry_time, "path": path},
+            )
         except ValueError:
-            print("Invalid Key-Expiry-Time: must be a valid Unix timestamp")
+            logger.error(
+                "Invalid Key-Expiry-Time header",
+                extra={"key_expiry_time": key_expiry_time, "path": path},
+            )
             raise HTTPException(
                 status_code=400,
                 detail="Invalid Key-Expiry-Time: must be a valid Unix timestamp",
             )
         if not refund_address:
-            print("Error: Refund-LNURL header required when using Key-Expiry-Time")
+            logger.error(
+                "Missing Refund-LNURL header with Key-Expiry-Time",
+                extra={"path": path, "expiry_time": key_expiry_time},
+            )
             raise HTTPException(
                 status_code=400,
                 detail="Error: Refund-LNURL header required when using Key-Expiry-Time",
@@ -355,12 +639,35 @@ async def get_bearer_token_key(
     else:
         key_expiry_time = None
 
-    return await validate_bearer_key(
-        bearer_key,
-        session,
-        refund_address,
-        key_expiry_time,  # type: ignore
-    )
+    try:
+        key = await validate_bearer_key(
+            bearer_key,
+            session,
+            refund_address,
+            key_expiry_time,  # type: ignore
+        )
+        logger.info(
+            "Bearer token validated successfully",
+            extra={
+                "path": path,
+                "key_hash": key.hashed_key[:8] + "...",
+                "key_balance": key.balance,
+            },
+        )
+        return key
+    except Exception as e:
+        logger.error(
+            "Bearer token validation failed",
+            extra={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "path": path,
+                "bearer_key_preview": bearer_key[:20] + "..."
+                if len(bearer_key) > 20
+                else bearer_key,
+            },
+        )
+        raise
 
 
 async def forward_get_to_upstream(
@@ -373,6 +680,11 @@ async def forward_get_to_upstream(
         path = path.replace("v1/", "")
 
     url = f"{UPSTREAM_BASE_URL}/{path}"
+
+    logger.info(
+        "Forwarding GET request to upstream",
+        extra={"url": url, "method": request.method, "path": path},
+    )
 
     async with httpx.AsyncClient(
         transport=httpx.AsyncHTTPTransport(retries=1),
@@ -389,6 +701,11 @@ async def forward_get_to_upstream(
                 ),
             )
 
+            logger.info(
+                "GET request forwarded successfully",
+                extra={"path": path, "status_code": response.status_code},
+            )
+
             return StreamingResponse(
                 response.aiter_bytes(),
                 status_code=response.status_code,
@@ -396,11 +713,17 @@ async def forward_get_to_upstream(
             )
         except Exception as exc:
             tb = traceback.format_exc()
-            print(
-                f"Unexpected error: {exc}\n"
-                f"Request details: method={request.method}, url={url}, headers={headers}, "
-                f"path={path}, query_params={dict(request.query_params)}\n"
-                f"Traceback:\n{tb}"
+            logger.error(
+                "Error forwarding GET request",
+                extra={
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "method": request.method,
+                    "url": url,
+                    "path": path,
+                    "query_params": dict(request.query_params),
+                    "traceback": tb,
+                },
             )
             return create_error_response(
                 "internal_error", "An unexpected server error occurred", 500
