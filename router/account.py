@@ -77,36 +77,21 @@ async def topup_wallet_endpoint(
     if any(char in cashu_token for char in ["\n", "\r", "\t"]):
         raise HTTPException(status_code=400, detail="Invalid token format")
 
-    # Capture stdout to detect errors from credit_balance
-    import io
-    from contextlib import redirect_stdout
-
-    f = io.StringIO()
-    with redirect_stdout(f):
+    # Try to redeem the token
+    try:
         amount_msats = await credit_balance(cashu_token, key, session)
-
-    output = f.getvalue()
-
-    # Check for errors in the output
-    if "Error in credit_balance:" in output and amount_msats == 0:
-        error_msg = output.split("Error in credit_balance: ")[-1].strip()
-        # Common error patterns
-        if "Token already spent" in error_msg:
+    except ValueError as e:
+        # Token redemption failed (invalid token, already spent, network error, etc.)
+        error_msg = str(e)
+        if "already spent" in error_msg.lower():
             raise HTTPException(status_code=400, detail="Token already spent")
-        elif "Failed to decode token" in error_msg:
+        elif "invalid" in error_msg.lower() or "decode" in error_msg.lower():
             raise HTTPException(status_code=400, detail="Invalid token format")
-        elif "Invalid token format" in error_msg:
-            raise HTTPException(status_code=400, detail="Invalid token format")
-        elif "Network error" in error_msg:
-            raise HTTPException(
-                status_code=400, detail="Network error during token verification"
-            )
         else:
-            raise HTTPException(
-                status_code=400, detail=f"Failed to redeem token: {error_msg}"
-            )
-
-    # Zero msats is valid if no error was printed
+            raise HTTPException(status_code=400, detail="Failed to redeem token")
+    except Exception:
+        # Unexpected error
+        raise HTTPException(status_code=500, detail="Internal server error")
     return {"msats": amount_msats}
 
 

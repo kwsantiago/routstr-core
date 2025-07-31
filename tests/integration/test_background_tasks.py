@@ -231,8 +231,10 @@ class TestRefundCheckTask:
             ):
                 # Call wallet send_to_lnurl to trigger the refund
                 amount_sats = expired_key.balance // 1000
-                await mock_wallet_instance.send_to_lnurl(expired_key.refund_address, amount=amount_sats)
-                
+                await mock_wallet_instance.send_to_lnurl(
+                    expired_key.refund_address, amount=amount_sats
+                )
+
                 # Update the key balance to 0 to simulate the refund
                 expired_key.balance = 0
                 integration_session.add(expired_key)
@@ -289,9 +291,10 @@ class TestRefundCheckTask:
             # Simulate refund processing for expired keys manually
             current_time = int(time.time())
             from sqlalchemy import select as sa_select
+
             result = await integration_session.execute(sa_select(ApiKey))
             keys = result.scalars().all()
-            
+
             for key in keys:
                 if (
                     key.balance > 0
@@ -301,11 +304,13 @@ class TestRefundCheckTask:
                 ):
                     amount_sats = key.balance // 1000
                     try:
-                        await mock_wallet_instance.send_to_lnurl(key.refund_address, amount=amount_sats)
+                        await mock_wallet_instance.send_to_lnurl(
+                            key.refund_address, amount=amount_sats
+                        )
                     except Exception:
                         pass  # Simulate the error for the second key
-                
-            # Should have attempted all refunds despite one failure 
+
+            # Should have attempted all refunds despite one failure
             assert refund_count == 3
 
     async def test_updates_refund_status_correctly(
@@ -377,9 +382,10 @@ class TestRefundCheckTask:
             # Simulate refund processing manually for eligible keys only
             current_time = int(time.time())
             from sqlalchemy import select as sa_select
+
             result = await integration_session.execute(sa_select(ApiKey))
             keys = result.scalars().all()
-            
+
             for key in keys:
                 if (
                     key.balance > 0
@@ -388,14 +394,16 @@ class TestRefundCheckTask:
                     and key.key_expiry_time < current_time
                 ):
                     amount_sats = key.balance // 1000
-                    await mock_wallet_instance.send_to_lnurl(key.refund_address, amount=amount_sats)
+                    await mock_wallet_instance.send_to_lnurl(
+                        key.refund_address, amount=amount_sats
+                    )
                     # Update balance to simulate refund
                     key.balance = 0
                     integration_session.add(key)
                 # Check if key needs to be deleted (zero balance after refund)
                 if key.balance == 0:
                     await integration_session.delete(key)
-            
+
             await integration_session.commit()
 
             # Verify correct keys were processed
@@ -419,7 +427,7 @@ class TestRefundCheckTask:
     async def test_refund_check_disabled(self) -> None:
         """Test that refund check can be disabled by setting interval to 0"""
         # Patch the constant directly to disable refunds
-        with patch.object(router.cashu, 'REFUND_PROCESSING_INTERVAL', 0):
+        with patch.object(router.cashu, "REFUND_PROCESSING_INTERVAL", 0):
             # Task should exit immediately
             task = asyncio.create_task(check_for_refunds())
             await task  # Should complete without hanging
@@ -432,7 +440,9 @@ class TestRefundCheckTask:
 class TestPeriodicPayoutTask:
     """Test the periodic payout background task"""
 
-    @pytest.mark.skip(reason="Timing-based test with complex mocking - skipping for CI reliability")
+    @pytest.mark.skip(
+        reason="Timing-based test with complex mocking - skipping for CI reliability"
+    )
     async def test_executes_at_configured_intervals(self) -> None:
         """Test that payout task runs at the configured interval"""
         pass
@@ -563,7 +573,9 @@ class TestPeriodicPayoutTask:
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(reason="Complex timing and concurrency tests - skipping for CI reliability")
+@pytest.mark.skip(
+    reason="Complex timing and concurrency tests - skipping for CI reliability"
+)
 class TestTaskInteractions:
     """Test interactions between background tasks"""
 
@@ -587,7 +599,7 @@ class TestTaskInteractions:
                 tasks.append(pricing_task)
 
                 # Refund task (disabled to avoid interference)
-                with patch.object(router.cashu, 'REFUND_PROCESSING_INTERVAL', 0):
+                with patch.object(router.cashu, "REFUND_PROCESSING_INTERVAL", 0):
                     refund_task = asyncio.create_task(check_for_refunds())
                     tasks.append(refund_task)
 
