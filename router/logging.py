@@ -152,10 +152,25 @@ def get_log_level() -> str:
     return os.environ.get("LOG_LEVEL", "INFO").upper()
 
 
+def should_enable_console_logging() -> bool:
+    """Check if console logging should be enabled."""
+    return os.environ.get("ENABLE_CONSOLE_LOGGING", "true").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+
+
 def setup_logging() -> None:
     """Configure centralized logging for the application."""
 
     log_level = get_log_level()
+    console_enabled = should_enable_console_logging()
+
+    # Determine which handlers to use
+    handlers = ["file"]
+    if console_enabled:
+        handlers.append("console")
 
     LOGGING_CONFIG = {
         "version": 1,
@@ -179,9 +194,7 @@ def setup_logging() -> None:
             "console": {
                 "class": "logging.StreamHandler",
                 "level": log_level,
-                "formatter": "json"
-                if os.environ.get("LOG_FORMAT", "json").lower() == "json"
-                else "standard",
+                "formatter": "standard",
                 "stream": "ext://sys.stdout",
                 "filters": ["version_filter", "security_filter"],
             },
@@ -200,47 +213,50 @@ def setup_logging() -> None:
         "loggers": {
             "router": {
                 "level": log_level,
-                "handlers": ["console", "file"],
+                "handlers": handlers,
                 "propagate": False,
             },
             "router.payment": {
                 "level": log_level,
-                "handlers": ["console", "file"],
+                "handlers": handlers,
                 "propagate": False,
             },
             "router.cashu": {
                 "level": log_level,
-                "handlers": ["console", "file"],
+                "handlers": handlers,
                 "propagate": False,
             },
             "router.proxy": {
                 "level": log_level,
-                "handlers": ["console", "file"],
+                "handlers": handlers,
                 "propagate": False,
             },
             "router.auth": {
                 "level": log_level,
-                "handlers": ["console", "file"],
+                "handlers": handlers,
                 "propagate": False,
             },
             # Suppress verbose third-party logging
             "httpx": {
                 "level": "WARNING",
-                "handlers": ["console"],
+                "handlers": ["console"] if console_enabled else [],
                 "propagate": False,
             },
             "httpcore": {
                 "level": "WARNING",
-                "handlers": ["console"],
+                "handlers": ["console"] if console_enabled else [],
                 "propagate": False,
             },
             "uvicorn.access": {
                 "level": "WARNING",
-                "handlers": ["console"],
+                "handlers": ["console"] if console_enabled else [],
                 "propagate": False,
             },
         },
-        "root": {"level": log_level, "handlers": ["console"]},
+        "root": {
+            "level": log_level,
+            "handlers": ["console"] if console_enabled else [],
+        },
     }
 
     os.makedirs("logs", exist_ok=True)
