@@ -5,7 +5,7 @@ from cashu.wallet.helpers import deserialize_token_from_string, receive, send
 from cashu.wallet.wallet import Wallet
 
 from .db import ApiKey, AsyncSession
-from .logging import logger
+from .logging import get_logger
 
 # from .cashu import (
 #     credit_balance,
@@ -19,6 +19,7 @@ from .logging import logger
 #     periodic_payout,
 # )
 
+logger = get_logger(__name__)
 
 CurrencyUnit = Literal["sat", "msat"]
 
