@@ -1,11 +1,10 @@
 import os
 from typing import Literal
 
-from cashu.core.settings import settings  # type: ignore
 from cashu.wallet.helpers import deserialize_token_from_string, receive, send
 from cashu.wallet.wallet import Wallet
 
-from .db import DATABASE_URL, ApiKey, AsyncSession
+from .db import ApiKey, AsyncSession
 
 # from .cashu import (
 #     credit_balance,
