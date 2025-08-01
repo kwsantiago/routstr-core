@@ -156,7 +156,8 @@ async def async_client(test_session: AsyncSession) -> AsyncGenerator[AsyncClient
                 mock_update.return_value = None
 
                 async with AsyncClient(
-                    transport=ASGITransport(app=app), base_url="http://test"
+                    transport=ASGITransport(app=app),  # type: ignore
+                    base_url="http://test",
                 ) as client:
                     yield client
 
