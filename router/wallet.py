@@ -21,7 +21,7 @@ from .db import ApiKey, AsyncSession
 
 CurrencyUnit = Literal["sat", "msat"]
 
-PRIMARY_MINT_URL = os.environ["PRIMARY_MINT_URL"]
+PRIMARY_MINT_URL = os.environ["CASHU_MINTS"].split(",")[0]
 
 
 async def get_balance(unit: CurrencyUnit) -> int:
