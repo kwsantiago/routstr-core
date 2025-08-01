@@ -7,13 +7,8 @@ from fastapi import BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
 from ..logging import get_logger
-from ..wallet import CurrencyUnit, create_refund_token, redeem_token
-from .cost_caculation import (
-    CostData,
-    CostDataError,
-    MaxCostData,
-    calculate_cost,
-)
+from ..wallet import CurrencyUnit, recieve_token, send_token
+from .cost_caculation import CostData, CostDataError, MaxCostData, calculate_cost
 from .helpers import (
     UPSTREAM_BASE_URL,
     create_error_response,
@@ -41,12 +36,12 @@ async def x_cashu_handler(
 
     try:
         headers = dict(request.headers)
-        amount, unit = await redeem_token(x_cashu_token)
+        amount, unit, mint = await recieve_token(x_cashu_token)
         headers = prepare_upstream_headers(dict(request.headers))
 
         logger.info(
             "X-Cashu token redeemed successfully",
-            extra={"amount": amount, "unit": unit, "path": path},
+            extra={"amount": amount, "unit": unit, "path": path, "mint": mint},
         )
 
         return await forward_to_upstream(request, path, headers, amount, unit)
@@ -453,7 +448,7 @@ async def handle_non_streaming_response(
 
         # Emergency refund with small deduction for processing
         emergency_refund = amount
-        refund_token = await create_refund_token(emergency_refund, unit=unit)
+        refund_token = await send_token(emergency_refund, unit=unit)
         response.headers["X-Cashu"] = refund_token
 
         logger.warning(
@@ -538,7 +533,7 @@ async def send_refund(amount: int, unit: CurrencyUnit, mint: str | None = None) 
 
     for attempt in range(max_retries):
         try:
-            refund_token = await create_refund_token(amount, unit=unit, mint_url=mint)
+            refund_token = await send_token(amount, unit=unit, mint_url=mint)
 
             logger.info(
                 "Refund token created successfully",

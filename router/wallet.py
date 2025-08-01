@@ -1,12 +1,11 @@
 import os
 from typing import Literal
 
-from cashu.core.base import Token
-from cashu.wallet.helpers import deserialize_token_from_string, redeem_universal
+from cashu.core.settings import settings  # type: ignore
+from cashu.wallet.helpers import deserialize_token_from_string, receive, send
 from cashu.wallet.wallet import Wallet
 
 from .db import DATABASE_URL, ApiKey, AsyncSession
-from .logging import get_logger
 
 # from .cashu import (
 #     credit_balance,
@@ -20,94 +19,93 @@ from .logging import get_logger
 #     periodic_payout,
 # )
 
-logger = get_logger(__name__)
-
-RECEIVE_LN_ADDRESS = os.environ["RECEIVE_LN_ADDRESS"]
-MINT = os.environ.get("MINT", "https://mint.minibits.cash/Bitcoin")
-MINIMUM_PAYOUT = int(os.environ.get("MINIMUM_PAYOUT", 100))
-REFUND_PROCESSING_INTERVAL = int(os.environ.get("REFUND_PROCESSING_INTERVAL", 3600))
-PAYOUT_INTERVAL = int(os.environ.get("PAYOUT_INTERVAL", 300))  # Default 5 minutes
-DEV_LN_ADDRESS = "routstr@minibits.cash"
-DEVS_DONATION_RATE = float(os.environ.get("DEVS_DONATION_RATE", 0.021))  # 2.1%
-NSEC = os.environ["NSEC"]  # Nostr private key for the wallet
-
-logger.info(
-    "Cashu module initialized",
-    extra={
-        "mint": MINT,
-        "minimum_payout": MINIMUM_PAYOUT,
-        "refund_processing_interval": REFUND_PROCESSING_INTERVAL,
-        "payout_interval": PAYOUT_INTERVAL,
-        "devs_donation_rate": DEVS_DONATION_RATE,
-    },
-)
 
 CurrencyUnit = Literal["sat", "msat"]
 
+PRIMARY_MINT_URL = os.environ["PRIMARY_MINT_URL"]
+
 
 async def get_balance(unit: CurrencyUnit) -> int:
-    raise NotImplementedError
+    wallet = await Wallet.with_db(
+        PRIMARY_MINT_URL,
+        # DATABASE_URL,
+        db=os.path.join(settings.cashu_dir, "temp"),
+        load_all_keysets=True,
+        unit=unit,
+    )
+    wallet.load_proofs()
+    return wallet.available_balance.amount
 
 
 async def recieve_token(
     token: str,
 ) -> tuple[int, CurrencyUnit, str]:  # amount, unit, mint_url
-    raise NotImplementedError
+    # trusted_mints = os.environ["CASHU_MINTS"].split(",")
+    token_obj = deserialize_token_from_string(token)
+    wallet = await Wallet.with_db(
+        token_obj.mint, DATABASE_URL, load_all_keysets=True, unit=token_obj.unit
+    )
+    await receive(wallet, token_obj)
+    return token_obj.amount, token_obj.unit, token_obj.mint
 
 
 async def send_token(
     amount: int, unit: CurrencyUnit, mint_url: str | None = None
 ) -> str:
-    raise NotImplementedError
+    wallet = await Wallet.with_db(
+        mint_url or PRIMARY_MINT_URL,
+        DATABASE_URL,
+        load_all_keysets=True,
+        unit=unit,
+    )
+    balance, token = await send(wallet, amount=amount)
+    return token
 
 
 # insert initial token state here to reduce db calls
-async def create_refund_token(
-    amount: int, unit: CurrencyUnit, mint_url: str | None = None
-) -> str:
-    wallet = await Wallet.with_db(
-        mint_url, DATABASE_URL, load_all_keysets=True, unit=unit
-    )
-    if wallet.balance_per_minturl(unit=unit)[mint_url] < amount:
-        raise ValueError("Wallet has no balance")
-    if mint_url is None:
-        mint_url = wallet.mint_urls[0]
-    return await wallet._make_token(amount, unit=unit, mint_url=mint_url)
+# async def create_refund_token(
+#     amount: int, unit: CurrencyUnit, mint_url: str | None = None
+# ) -> str:
+#     wallet = await Wallet.with_db(
+#         mint_url, DATABASE_URL, load_all_keysets=True, unit=unit
+#     )
+#     if wallet.balance_per_minturl(unit=unit)[mint_url] < amount:
+#         raise ValueError("Wallet has no balance")
+#     if mint_url is None:
+#         mint_url = wallet.mint_urls[0]
+#     return await wallet._make_token(amount, unit=unit, mint_url=mint_url)
 
 
-async def redeem_token(token: str) -> Token:
-    token_obj = deserialize_token_from_string(token)
-    wallet = await Wallet.with_db(
-        token_obj.mint,
-        DATABASE_URL,
-        load_all_keysets=True,
-        unit=token_obj.unit,
-    )
-    return await redeem_universal(wallet, token_obj)
-
-
-async def delete_key_if_zero_balance(key: str) -> None:
-    raise NotImplementedError
+# async def redeem_token(token: str) -> Token:
+#     token_obj = deserialize_token_from_string(token)
+#     wallet = await Wallet.with_db(
+#         token_obj.mint,
+#         DATABASE_URL,
+#         load_all_keysets=True,
+#         unit=token_obj.unit,
+#     )
+#     return await redeem_universal(wallet, token_obj)
 
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
     raise NotImplementedError
 
 
-async def check_for_refunds() -> None:
+async def send_to_lnurl(amount: int, unit: CurrencyUnit, lnurl: str) -> dict[str, int]:
     raise NotImplementedError
+
+
+async def check_for_refunds() -> None:
+    print("check_for_refunds, temp not implemented")
 
 
 async def init_wallet() -> None:
-    raise NotImplementedError
+    balance = await get_balance("sat")
+    print(f"init_wallet, balance: {balance}")
 
 
 async def periodic_payout() -> None:
-    raise NotImplementedError
-
-
-async def get_wallet_balance() -> int:
-    raise NotImplementedError
+    print("periodic_payout, temp not implemented")
 
 
 # class Proof:

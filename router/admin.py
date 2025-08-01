@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 from sqlmodel import select
 
 from .db import ApiKey, create_session
-from .wallet import get_wallet_balance
+from .wallet import get_balance
 
 admin_router = APIRouter(prefix="/admin")
 
@@ -112,7 +112,7 @@ async def dashboard(request: Request) -> str:
     # avoid rounding issues.
     total_user_balance = sum(key.balance for key in api_keys) // 1000
     # Fetch balance from cashu
-    current_balance = await get_wallet_balance()
+    current_balance = await get_balance("sat")
     owner_balance = current_balance - total_user_balance
 
     return f"""<!DOCTYPE html>
