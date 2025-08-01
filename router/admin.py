@@ -384,21 +384,14 @@ async def admin(request: Request) -> str:
 
 
 @admin_router.post("/withdraw")
-async def withdraw_owner_balance(
+async def withdraw(
     request: Request, withdraw_request: WithdrawRequest
 ) -> dict[str, str]:
     admin_cookie = request.cookies.get("admin_password")
     if not admin_cookie or admin_cookie != os.getenv("ADMIN_PASSWORD"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    # Calculate owner balance
-    async with create_session() as session:
-        result = await session.exec(select(ApiKey))
-        api_keys = result.all()
-
-    total_user_balance = sum(key.balance for key in api_keys) // 1000
     current_balance = await get_balance("sat")
-    owner_balance = current_balance - total_user_balance
 
     if withdraw_request.amount <= 0:
         raise HTTPException(
