@@ -1,14 +1,14 @@
 import base64
 import json
 import os
+from typing import Literal
 
 import cbor2
 from fastapi import HTTPException, Response
-from sixty_nuts.types import CurrencyUnit
 
-from router.logging.logging_config import get_logger
-from router.models import MODELS
-from router.payment.cost_caculation import COST_PER_REQUEST, MODEL_BASED_PRICING
+from ..logging import get_logger
+from ..models import MODELS
+from .cost_caculation import COST_PER_REQUEST, MODEL_BASED_PRICING
 
 logger = get_logger(__name__)
 
@@ -49,7 +49,7 @@ def get_cost_per_request(model: str | None = None) -> int:
     return COST_PER_REQUEST
 
 
-def check_token_balance(headers: dict, body: dict) -> CurrencyUnit:
+def check_token_balance(headers: dict, body: dict) -> Literal["sat", "msat"]:
     """Check if the provided token has sufficient balance."""
     logger.debug(
         "Checking token balance",
@@ -113,7 +113,7 @@ def check_token_balance(headers: dict, body: dict) -> CurrencyUnit:
         try:
             _token = base64_token_json(cashu_token)
             amount = sum(p["amount"] for t in _token["token"] for p in t["proofs"])
-            unit: CurrencyUnit = _token["unit"]
+            unit: Literal["sat", "msat"] = _token["unit"]
 
             if unit == "sat":
                 amount *= 1000

@@ -8,12 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .account import wallet_router
 from .admin import admin_router
-from .cashu import check_for_refunds, init_wallet, periodic_payout
 from .db import init_db
 from .discovery import providers_router
-from .logging.logging_config import get_logger, setup_logging
+from .logging import get_logger, setup_logging
 from .models import MODELS, models_router, update_sats_pricing
 from .proxy import proxy_router
+from .wallet import check_for_refunds, periodic_payout
 
 # Initialize logging first
 setup_logging()
@@ -30,7 +30,6 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
         await init_db()
         logger.info("Database initialized successfully")
 
-        await init_wallet()
         logger.info("Wallet initialized successfully")
 
         pricing_task = asyncio.create_task(update_sats_pricing())

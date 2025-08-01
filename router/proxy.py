@@ -7,15 +7,6 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
-from router.logging.logging_config import get_logger
-from router.payment.helpers import (
-    UPSTREAM_BASE_URL,
-    check_token_balance,
-    create_error_response,
-    prepare_upstream_headers,
-)
-from router.payment.x_cashu import x_cashu_handler
-
 from .auth import (
     adjust_payment_for_tokens,
     pay_for_request,
@@ -23,6 +14,14 @@ from .auth import (
     validate_bearer_key,
 )
 from .db import ApiKey, AsyncSession, create_session, get_session
+from .logging import get_logger
+from .payment.helpers import (
+    UPSTREAM_BASE_URL,
+    check_token_balance,
+    create_error_response,
+    prepare_upstream_headers,
+)
+from .payment.x_cashu import x_cashu_handler
 
 logger = get_logger(__name__)
 proxy_router = APIRouter()
