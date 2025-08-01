@@ -11,13 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from router.db import get_session
-from router.main import app
-
 # Save original environment variables
 ORIGINAL_ENV = os.environ.copy()
 
-# Set test environment variables before importing the app
+# Set test environment variables BEFORE importing the app
 TEST_ENV = {
     "UPSTREAM_BASE_URL": "https://api.example.com",
     "UPSTREAM_API_KEY": "test-upstream-key",
@@ -38,6 +35,10 @@ TEST_ENV = {
 
 # Apply test environment
 os.environ.update(TEST_ENV)
+
+# Now import modules that depend on environment variables
+from router.db import get_session  # noqa: E402
+from router.main import app  # noqa: E402
 
 
 @pytest.fixture(scope="session")
