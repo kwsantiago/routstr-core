@@ -29,7 +29,7 @@ async def get_balance(unit: CurrencyUnit) -> int:
     wallet = await Wallet.with_db(
         PRIMARY_MINT_URL,
         # DATABASE_URL,
-        db=os.path.join(settings.cashu_dir, "temp"),
+        db=".wallet",
         load_all_keysets=True,
         unit=unit,
     )
@@ -43,7 +43,10 @@ async def recieve_token(
     # trusted_mints = os.environ["CASHU_MINTS"].split(",")
     token_obj = deserialize_token_from_string(token)
     wallet = await Wallet.with_db(
-        token_obj.mint, DATABASE_URL, load_all_keysets=True, unit=token_obj.unit
+        token_obj.mint,
+        db=".wallet",
+        load_all_keysets=True,
+        unit=token_obj.unit,
     )
     await receive(wallet, token_obj)
     return token_obj.amount, token_obj.unit, token_obj.mint
@@ -54,11 +57,11 @@ async def send_token(
 ) -> str:
     wallet = await Wallet.with_db(
         mint_url or PRIMARY_MINT_URL,
-        DATABASE_URL,
+        db=".wallet",
         load_all_keysets=True,
         unit=unit,
     )
-    balance, token = await send(wallet, amount=amount)
+    balance, token = await send(wallet, amount=amount, lock="", legacy=False)
     return token
 
 
