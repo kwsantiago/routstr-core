@@ -5,6 +5,7 @@ from cashu.wallet.helpers import deserialize_token_from_string, receive, send
 from cashu.wallet.wallet import Wallet
 
 from .db import ApiKey, AsyncSession
+from .logging import logger
 
 # from .cashu import (
 #     credit_balance,
@@ -90,7 +91,19 @@ async def send_token(
 
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
-    raise NotImplementedError
+    amount, unit, mint_url = await recieve_token(cashu_token)
+    if unit == "sat":
+        amount = amount * 1000
+    if mint_url != PRIMARY_MINT_URL:
+        raise ValueError("Mint URL is not supported by this proxy")
+    key.balance += amount
+    session.add(key)
+    await session.commit()
+    logger.info(
+        "Cashu token successfully redeemed and stored",
+        extra={"amount": amount, "unit": unit, "mint_url": mint_url},
+    )
+    return amount
 
 
 async def send_to_lnurl(amount: int, unit: CurrencyUnit, lnurl: str) -> dict[str, int]:
