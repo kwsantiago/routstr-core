@@ -51,16 +51,37 @@ async def x_cashu_handler(
 
         return await forward_to_upstream(request, path, headers, amount, unit)
     except Exception as e:
+        error_message = str(e)
         logger.error(
             "X-Cashu payment request failed",
             extra={
-                "error": str(e),
+                "error": error_message,
                 "error_type": type(e).__name__,
                 "path": path,
                 "method": request.method,
             },
         )
-        raise
+
+        # Handle specific CASHU errors with appropriate HTTP status codes
+        if "already spent" in error_message.lower():
+            return create_error_response(
+                "token_already_spent",
+                "The provided CASHU token has already been spent",
+                400,
+            )
+        elif "invalid token" in error_message.lower():
+            return create_error_response(
+                "invalid_token", "The provided CASHU token is invalid", 400
+            )
+        elif "mint error" in error_message.lower():
+            return create_error_response(
+                "mint_error", f"CASHU mint error: {error_message}", 422
+            )
+        else:
+            # Generic error for other cases
+            return create_error_response(
+                "cashu_error", f"CASHU token processing failed: {error_message}", 400
+            )
 
 
 async def forward_to_upstream(
