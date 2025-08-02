@@ -302,7 +302,13 @@ async def handle_streaming_response(
         try:
             cost_data = await get_cost(response_data)
             if cost_data:
-                refund_amount = amount - cost_data.total_msats
+                if unit == "msat":
+                    refund_amount = amount - cost_data.total_msats
+                elif unit == "sat":
+                    refund_amount = amount - (cost_data.total_msats + 999) // 1000
+                else:
+                    raise ValueError(f"Invalid unit: {unit}")
+
                 if refund_amount > 0:
                     logger.info(
                         "Processing refund for streaming response",
@@ -404,7 +410,12 @@ async def handle_non_streaming_response(
         if "content-encoding" in response_headers:
             del response_headers["content-encoding"]
 
-        refund_amount = amount - cost_data.total_msats
+        if unit == "msat":
+            refund_amount = amount - cost_data.total_msats
+        elif unit == "sat":
+            refund_amount = amount - (cost_data.total_msats + 999) // 1000
+        else:
+            raise ValueError(f"Invalid unit: {unit}")
 
         logger.info(
             "Processing non-streaming response cost calculation",
