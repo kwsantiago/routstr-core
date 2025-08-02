@@ -8,18 +8,6 @@ from cashu.wallet.wallet import Wallet
 from .db import ApiKey, AsyncSession
 from .logging import get_logger
 
-# from .cashu import (
-#     credit_balance,
-#     delete_key_if_zero_balance,
-#     refund_balance,
-#     wallet,
-# )
-# from .cashu import (
-#     check_for_refunds,
-#     init_wallet,
-#     periodic_payout,
-# )
-
 logger = get_logger(__name__)
 
 CurrencyUnit = Literal["sat", "msat"]
@@ -93,34 +81,6 @@ async def swap_to_primary_mint(
         quote_id=melt_quote.quote,
     )
 
-    _ = await wallet.mint(token_obj.amount, mint_quote.quote)
-
-    return token_obj.amount, "sat", PRIMARY_MINT_URL
-
-
-# insert initial token state here to reduce db calls
-# async def create_refund_token(
-#     amount: int, unit: CurrencyUnit, mint_url: str | None = None
-# ) -> str:
-#     wallet = await Wallet.with_db(
-#         mint_url, DATABASE_URL, load_all_keysets=True, unit=unit
-#     )
-#     if wallet.balance_per_minturl(unit=unit)[mint_url] < amount:
-#         raise ValueError("Wallet has no balance")
-#     if mint_url is None:
-#         mint_url = wallet.mint_urls[0]
-#     return await wallet._make_token(amount, unit=unit, mint_url=mint_url)
-
-
-# async def redeem_token(token: str) -> Token:
-#     token_obj = deserialize_token_from_string(token)
-#     wallet = await Wallet.with_db(
-#         token_obj.mint,
-#         DATABASE_URL,
-#         load_all_keysets=True,
-#         unit=token_obj.unit,
-#     )
-#     return await redeem_universal(wallet, token_obj)
 
 
 async def credit_balance(cashu_token: str, key: ApiKey, session: AsyncSession) -> int:
