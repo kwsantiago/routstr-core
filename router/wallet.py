@@ -39,8 +39,11 @@ async def recieve_token(
         unit=token_obj.unit,
     )
 
-    if token_obj.mint not in TRUSTED_MINTS:
-        return await swap_to_primary_mint(token_obj, wallet)
+    if token_obj.mint != PRIMARY_MINT_URL:
+        raise ValueError(
+            f"This mint is not supported, please use {PRIMARY_MINT_URL} instead"
+        )
+
     await receive(wallet, token_obj)
     return token_obj.amount, token_obj.unit, token_obj.mint
 
@@ -61,7 +64,14 @@ async def send_token(
 async def swap_to_primary_mint(
     token_obj: Token, token_wallet: Wallet
 ) -> tuple[int, CurrencyUnit, str]:
-    print(f"swap_to_primary_mint, token_obj: {token_obj}")
+    logger.info(
+        "swap_to_primary_mint",
+        extra={
+            "mint": token_obj.mint,
+            "amount": token_obj.amount,
+            "unit": token_obj.unit,
+        },
+    )
     if token_obj.unit == "sat":
         amount_msat = token_obj.amount * 1000
     elif token_obj.unit == "msat":
