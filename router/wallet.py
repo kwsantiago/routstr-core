@@ -107,11 +107,6 @@ async def check_for_refunds() -> None:
     print("check_for_refunds, temp not implemented")
 
 
-async def init_wallet() -> None:
-    balance = await get_balance("sat")
-    print(f"init_wallet, balance: {balance}")
-
-
 async def periodic_payout() -> None:
     print("periodic_payout, temp not implemented")
 
