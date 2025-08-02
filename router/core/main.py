@@ -28,16 +28,10 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 
     try:
         await init_db()
-        logger.info("Database initialized successfully")
 
         pricing_task = asyncio.create_task(update_sats_pricing())
         refund_task = asyncio.create_task(check_for_refunds())
         payout_task = asyncio.create_task(periodic_payout())
-
-        logger.info(
-            "Background tasks started successfully",
-            extra={"tasks": ["pricing", "refunds", "payouts"]},
-        )
 
         yield
 
@@ -106,8 +100,3 @@ app.include_router(balance_router)
 app.include_router(deprecated_wallet_router)
 app.include_router(providers_router)
 app.include_router(proxy_router)
-
-logger.info(
-    "Application initialized successfully",
-    extra={"version": __version__, "routers_count": 5},
-)

@@ -117,11 +117,11 @@ async def send_to_lnurl(amount: int, unit: CurrencyUnit, lnurl: str) -> dict[str
 
 
 async def check_for_refunds() -> None:
-    print("check_for_refunds, temp not implemented")
+    logger.warning("check_for_refunds, temporary not implemented")
 
 
 async def periodic_payout() -> None:
-    print("periodic_payout, temp not implemented")
+    logger.warning("periodic_payout, temporary not implemented")
 
 
 # class Proof:
