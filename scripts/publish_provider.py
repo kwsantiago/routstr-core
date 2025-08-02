@@ -7,10 +7,10 @@ Based on: https://github.com/Routstr/protocol/blob/main/RIP-02.md
 Event Kind: 31338 (Routstr Provider Announcements)
 """
 
+import asyncio
 import hashlib
 import json
 import time
-import asyncio
 from typing import Any
 
 import secp256k1

@@ -44,7 +44,7 @@ async def query_nostr_relay_for_providers(
 
     try:
         async with websockets.connect(relay_url, timeout=timeout) as websocket:
-            print(f"Connected to relay, searching for kind 31338 events")
+            print("Connected to relay, searching for kind 31338 events")
             await websocket.send(req_message)
 
             while True:
