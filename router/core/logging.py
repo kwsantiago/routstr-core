@@ -252,6 +252,11 @@ def setup_logging() -> None:
                 "handlers": ["console"] if console_enabled else [],
                 "propagate": False,
             },
+            "watchfiles": {
+                "level": "WARNING",
+                "handlers": ["console"] if console_enabled else [],
+                "propagate": False,
+            },
         },
         "root": {
             "level": log_level,

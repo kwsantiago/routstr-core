@@ -6,14 +6,14 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .account import wallet_router
+from ..balance import balance_router, deprecated_wallet_router
+from ..discovery import providers_router
+from ..payment.models import MODELS, models_router, update_sats_pricing
+from ..proxy import proxy_router
+from ..wallet import check_for_refunds, periodic_payout
 from .admin import admin_router
 from .db import init_db
-from .discovery import providers_router
 from .logging import get_logger, setup_logging
-from .models import MODELS, models_router, update_sats_pricing
-from .proxy import proxy_router
-from .wallet import check_for_refunds, periodic_payout
 
 # Initialize logging first
 setup_logging()
@@ -84,7 +84,8 @@ app.add_middleware(
 )
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
+@app.get("/v1/info")
 async def info() -> dict:
     logger.info("Info endpoint accessed")
     return {
@@ -101,7 +102,8 @@ async def info() -> dict:
 
 app.include_router(models_router)
 app.include_router(admin_router)
-app.include_router(wallet_router)
+app.include_router(balance_router)
+app.include_router(deprecated_wallet_router)
 app.include_router(providers_router)
 app.include_router(proxy_router)
 
