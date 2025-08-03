@@ -47,7 +47,7 @@ def get_cost_per_request(model: str | None = None) -> int:
     return COST_PER_REQUEST
 
 
-def check_token_balance(headers: dict, body: dict) -> None:
+def check_token_balance(headers: dict, body: dict, max_cost_for_model: int) -> None:
     if x_cashu := headers.get("x-cashu", None):
         cashu_token = x_cashu
         logger.debug(
@@ -90,20 +90,18 @@ def check_token_balance(headers: dict, body: dict) -> None:
     if cashu_token.startswith("sk-"):
         return
 
-    cost = get_cost_per_request(model=body.get("model", None))
-
     token_obj = deserialize_token_from_string(cashu_token)
 
     amount_msat = (
         token_obj.amount if token_obj.unit == "msat" else token_obj.amount * 1000
     )
 
-    if cost > amount_msat:
+    if max_cost_for_model > amount_msat:
         raise HTTPException(
             status_code=413,
             detail={
                 "reason": "Insufficient balance",
-                "amount_required_msat": cost,
+                "amount_required_msat": max_cost_for_model,
                 "model": body.get("model", "unknown"),
                 "type": "minimum_balance_required",
             },
