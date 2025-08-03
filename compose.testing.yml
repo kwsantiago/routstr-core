@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  router:
+    command: ["/.venv/bin/fastapi", "dev", "router", "--host", "0.0.0.0"]
+    environment:
+      - NOSTR_RELAY_URL=ws://relay:8080
+      - UPSTREAM_BASE_URL=http://mock-openai:3000
+      - UPSTREAM_API_KEY=test-upstream-key
+      - CASHU_MINTS=http://mock-mint:3338
+    volumes:
+      - ./:/app
+
+  relay:
+    image: scsibug/nostr-rs-relay:latest
+    restart: unless-stopped
+    ports:
+      - "8088:8080"  # host:container
+    volumes:
+      - ./.relay/data:/usr/src/app/db
+      - ./.relay/config.toml:/usr/src/app/config.toml:ro
+    environment:
+      - LISTEN_ADDR=0.0.0.0
+      - LISTEN_PORT=8088
+
+  mock-openai:
+    image: zerob13/mock-openai-api
+    ports:
+      - "3000:3000"
+  
+  mock-mint:
+    image: cashubtc/nutshell:0.17.0
+    container_name: mint
+    ports:
+      - "3338:3338"
+    environment:
+      - MINT_BACKEND_BOLT11_SAT=FakeWallet
+      - MINT_LISTEN_HOST=0.0.0.0
+      - MINT_LISTEN_PORT=3338
+      - MINT_PRIVATE_KEY=TEST_PRIVATE_KEY
+    command: poetry run mint
+    restart: unless-stopped
+    depends_on:
+      - mock-openai
