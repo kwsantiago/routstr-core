@@ -1,21 +1,20 @@
 import json
 import traceback
-from typing import AsyncGenerator, Literal, cast
+from typing import AsyncGenerator
 
 import httpx
 from fastapi import BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
-from sixty_nuts.types import CurrencyUnit
 
-from router.cashu import wallet
-from router.logging.logging_config import get_logger
-from router.payment.cost_caculation import (
+from ..core import get_logger
+from ..wallet import CurrencyUnit, recieve_token, send_token
+from .cost_caculation import (
     CostData,
     CostDataError,
     MaxCostData,
     calculate_cost,
 )
-from router.payment.helpers import (
+from .helpers import (
     UPSTREAM_BASE_URL,
     create_error_response,
     get_max_cost_for_model,
@@ -42,26 +41,47 @@ async def x_cashu_handler(
 
     try:
         headers = dict(request.headers)
-        amount, unit = await redeem_token(x_cashu_token)
+        amount, unit, mint = await recieve_token(x_cashu_token)
         headers = prepare_upstream_headers(dict(request.headers))
 
         logger.info(
             "X-Cashu token redeemed successfully",
-            extra={"amount": amount, "unit": unit, "path": path},
+            extra={"amount": amount, "unit": unit, "path": path, "mint": mint},
         )
 
         return await forward_to_upstream(request, path, headers, amount, unit)
     except Exception as e:
+        error_message = str(e)
         logger.error(
             "X-Cashu payment request failed",
             extra={
-                "error": str(e),
+                "error": error_message,
                 "error_type": type(e).__name__,
                 "path": path,
                 "method": request.method,
             },
         )
-        raise
+
+        # Handle specific CASHU errors with appropriate HTTP status codes
+        if "already spent" in error_message.lower():
+            return create_error_response(
+                "token_already_spent",
+                "The provided CASHU token has already been spent",
+                400,
+            )
+        elif "invalid token" in error_message.lower():
+            return create_error_response(
+                "invalid_token", "The provided CASHU token is invalid", 400
+            )
+        elif "mint error" in error_message.lower():
+            return create_error_response(
+                "mint_error", f"CASHU mint error: {error_message}", 422
+            )
+        else:
+            # Generic error for other cases
+            return create_error_response(
+                "cashu_error", f"CASHU token processing failed: {error_message}", 400
+            )
 
 
 async def forward_to_upstream(
@@ -303,7 +323,13 @@ async def handle_streaming_response(
         try:
             cost_data = await get_cost(response_data)
             if cost_data:
-                refund_amount = amount - cost_data.total_msats
+                if unit == "msat":
+                    refund_amount = amount - cost_data.total_msats
+                elif unit == "sat":
+                    refund_amount = amount - (cost_data.total_msats + 999) // 1000
+                else:
+                    raise ValueError(f"Invalid unit: {unit}")
+
                 if refund_amount > 0:
                     logger.info(
                         "Processing refund for streaming response",
@@ -405,7 +431,12 @@ async def handle_non_streaming_response(
         if "content-encoding" in response_headers:
             del response_headers["content-encoding"]
 
-        refund_amount = amount - cost_data.total_msats
+        if unit == "msat":
+            refund_amount = amount - cost_data.total_msats
+        elif unit == "sat":
+            refund_amount = amount - (cost_data.total_msats + 999) // 1000
+        else:
+            raise ValueError(f"Invalid unit: {unit}")
 
         logger.info(
             "Processing non-streaming response cost calculation",
@@ -454,7 +485,7 @@ async def handle_non_streaming_response(
 
         # Emergency refund with small deduction for processing
         emergency_refund = amount
-        refund_token = await wallet().send(emergency_refund)
+        refund_token = await send_token(emergency_refund, unit=unit)
         response.headers["X-Cashu"] = refund_token
 
         logger.warning(
@@ -528,50 +559,6 @@ async def get_cost(response_data: dict) -> MaxCostData | CostData | None:
             )
 
 
-async def redeem_token(x_cashu_token: str) -> tuple[int, Literal["sat", "msat"]]:
-    """Redeem X-Cashu token and return amount and unit."""
-    logger.debug(
-        "Redeeming X-Cashu token",
-        extra={
-            "token_preview": x_cashu_token[:20] + "..."
-            if len(x_cashu_token) > 20
-            else x_cashu_token
-        },
-    )
-
-    try:
-        result = await wallet().redeem(x_cashu_token)
-        amount, unit = cast(tuple[int, Literal["sat", "msat"]], result)
-
-        logger.info(
-            "X-Cashu token redeemed successfully",
-            extra={"amount": amount, "unit": unit},
-        )
-
-        return amount, unit
-    except Exception as e:
-        logger.error(
-            "X-Cashu token redemption failed",
-            extra={
-                "error": str(e),
-                "error_type": type(e).__name__,
-                "token_preview": x_cashu_token[:20] + "..."
-                if len(x_cashu_token) > 20
-                else x_cashu_token,
-            },
-        )
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "error": {
-                    "message": f"Invalid or expired Cashu key: {str(e)}",
-                    "type": "invalid_request_error",
-                    "code": "invalid_api_key",
-                }
-            },
-        )
-
-
 async def send_refund(amount: int, unit: CurrencyUnit, mint: str | None = None) -> str:
     """Send a refund using Cashu tokens."""
     logger.debug(
@@ -583,7 +570,7 @@ async def send_refund(amount: int, unit: CurrencyUnit, mint: str | None = None) 
 
     for attempt in range(max_retries):
         try:
-            refund_token = await wallet().send(amount, unit=unit, mint_url=mint)
+            refund_token = await send_token(amount, unit=unit, mint_url=mint)
 
             logger.info(
                 "Refund token created successfully",

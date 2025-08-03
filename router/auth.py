@@ -4,9 +4,8 @@ from typing import Optional
 from fastapi import HTTPException
 from sqlmodel import col, update
 
-from .cashu import credit_balance
-from .db import ApiKey, AsyncSession
-from .logging.logging_config import get_logger
+from .core import get_logger
+from .core.db import ApiKey, AsyncSession
 from .payment.cost_caculation import (
     CostData,
     CostDataError,
@@ -14,6 +13,7 @@ from .payment.cost_caculation import (
     calculate_cost,
 )
 from .payment.helpers import get_max_cost_for_model
+from .wallet import credit_balance
 
 logger = get_logger(__name__)
 

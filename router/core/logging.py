@@ -8,6 +8,21 @@ from pathlib import Path
 from typing import Any
 
 from pythonjsonlogger import jsonlogger
+from rich.logging import RichHandler
+
+# Define custom TRACE level
+TRACE_LEVEL = 5
+logging.addLevelName(TRACE_LEVEL, "TRACE")
+
+
+def trace(self: logging.Logger, message: str, *args: Any, **kwargs: Any) -> None:
+    """Log with TRACE level"""
+    if self.isEnabledFor(TRACE_LEVEL):
+        self._log(TRACE_LEVEL, message, args, **kwargs)
+
+
+# Add the trace method to Logger class
+setattr(logging.Logger, "trace", trace)
 
 
 class DailyRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
@@ -149,13 +164,33 @@ class SecurityFilter(logging.Filter):
 
 def get_log_level() -> str:
     """Get log level from environment variable."""
-    return os.environ.get("LOG_LEVEL", "INFO").upper()
+    level = os.environ.get("LOG_LEVEL", "INFO").upper()
+    # Validate log level - if invalid, default to INFO
+    valid_levels = {"TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    if level not in valid_levels:
+        level = "INFO"
+    return level
+
+
+def should_enable_console_logging() -> bool:
+    """Check if console logging should be enabled."""
+    return os.environ.get("ENABLE_CONSOLE_LOGGING", "true").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
 
 
 def setup_logging() -> None:
     """Configure centralized logging for the application."""
 
     log_level = get_log_level()
+    console_enabled = should_enable_console_logging()
+
+    # Determine which handlers to use
+    handlers = ["file"]
+    if console_enabled:
+        handlers.append("console")
 
     LOGGING_CONFIG = {
         "version": 1,
@@ -166,10 +201,6 @@ def setup_logging() -> None:
                 "format": "%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d %(version)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
-            "standard": {
-                "format": "%(asctime)s [%(levelname)s] %(name)s v%(version)s: %(message)s",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-            },
         },
         "filters": {
             "version_filter": {"()": VersionFilter},
@@ -177,13 +208,13 @@ def setup_logging() -> None:
         },
         "handlers": {
             "console": {
-                "class": "logging.StreamHandler",
+                "()": RichHandler,
                 "level": log_level,
-                "formatter": "json"
-                if os.environ.get("LOG_FORMAT", "json").lower() == "json"
-                else "standard",
-                "stream": "ext://sys.stdout",
-                "filters": ["version_filter", "security_filter"],
+                "show_time": False,
+                "show_path": False,
+                "rich_tracebacks": True,
+                "markup": True,
+                "filters": ["security_filter"],
             },
             "file": {
                 "()": DailyRotatingFileHandler,
@@ -200,47 +231,56 @@ def setup_logging() -> None:
         "loggers": {
             "router": {
                 "level": log_level,
-                "handlers": ["console", "file"],
+                "handlers": handlers,
                 "propagate": False,
             },
             "router.payment": {
                 "level": log_level,
-                "handlers": ["console", "file"],
+                "handlers": handlers,
                 "propagate": False,
             },
             "router.cashu": {
                 "level": log_level,
-                "handlers": ["console", "file"],
+                "handlers": handlers,
                 "propagate": False,
             },
             "router.proxy": {
                 "level": log_level,
-                "handlers": ["console", "file"],
+                "handlers": handlers,
                 "propagate": False,
             },
             "router.auth": {
                 "level": log_level,
-                "handlers": ["console", "file"],
+                "handlers": handlers,
                 "propagate": False,
             },
             # Suppress verbose third-party logging
             "httpx": {
                 "level": "WARNING",
-                "handlers": ["console"],
+                "handlers": ["console"] if console_enabled else [],
                 "propagate": False,
             },
             "httpcore": {
                 "level": "WARNING",
-                "handlers": ["console"],
+                "handlers": ["console"] if console_enabled else [],
                 "propagate": False,
             },
             "uvicorn.access": {
                 "level": "WARNING",
+                "handlers": ["console"] if console_enabled else [],
+                "propagate": False,
+            },
+            "uvicorn.error": {
+                "level": "INFO",
                 "handlers": ["console"],
                 "propagate": False,
             },
+            "watchfiles.main": {"level": "WARNING", "handlers": [], "propagate": False},
         },
-        "root": {"level": log_level, "handlers": ["console"]},
+        "root": {
+            "level": log_level,
+            "handlers": ["console"] if console_enabled else [],
+        },
     }
 
     os.makedirs("logs", exist_ok=True)

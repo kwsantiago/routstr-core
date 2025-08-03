@@ -3,15 +3,11 @@ from typing import Annotated, NoReturn
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from .auth import validate_bearer_key
-from .cashu import (
-    credit_balance,
-    delete_key_if_zero_balance,
-    refund_balance,
-    wallet,
-)
-from .db import ApiKey, AsyncSession, get_session
+from .core.db import ApiKey, AsyncSession, get_session
+from .wallet import credit_balance, send_to_lnurl, send_token
 
-wallet_router = APIRouter(prefix="/v1/wallet")
+router = APIRouter()
+balance_router = APIRouter(prefix="/v1/balance")
 
 
 async def get_key_from_header(
@@ -28,7 +24,7 @@ async def get_key_from_header(
 
 
 # TODO: remove this endpoint when frontend is updated
-@wallet_router.get("/")
+@router.get("/", include_in_schema=False)
 async def account_info(key: ApiKey = Depends(get_key_from_header)) -> dict:
     return {
         "api_key": "sk-" + key.hashed_key,
@@ -36,7 +32,7 @@ async def account_info(key: ApiKey = Depends(get_key_from_header)) -> dict:
     }
 
 
-@wallet_router.get("/info")
+@router.get("/info")
 async def wallet_info(key: ApiKey = Depends(get_key_from_header)) -> dict:
     return {
         "api_key": "sk-" + key.hashed_key,
@@ -44,7 +40,7 @@ async def wallet_info(key: ApiKey = Depends(get_key_from_header)) -> dict:
     }
 
 
-@wallet_router.post("/topup")
+@router.post("/topup")
 async def topup_wallet_endpoint(
     cashu_token: str,
     key: ApiKey = Depends(get_key_from_header),
@@ -95,7 +91,7 @@ async def topup_wallet_endpoint(
     return {"msats": amount_msats}
 
 
-@wallet_router.post("/refund")
+@router.post("/refund")
 async def refund_wallet_endpoint(
     key: ApiKey = Depends(get_key_from_header),
     session: AsyncSession = Depends(get_session),
@@ -107,9 +103,8 @@ async def refund_wallet_endpoint(
 
     # Perform refund operation first, before modifying balance
     if key.refund_address:
-        # refund_balance handles balance update and key deletion
-        await refund_balance(remaining_balance_msats, key, session)
-        return {"recipient": key.refund_address, "msats": remaining_balance_msats}
+        await send_to_lnurl(remaining_balance_msats, "msat", key.refund_address)
+        result = {"recipient": key.refund_address, "msat": remaining_balance_msats}
     else:
         # Convert msats to sats for cashu wallet
         remaining_balance_sats = remaining_balance_msats // 1000
@@ -119,24 +114,17 @@ async def refund_wallet_endpoint(
             )
 
         # TODO: choose currency and mint based on what user has configured
-        try:
-            token = await wallet().send(remaining_balance_sats)
-        except Exception as e:
-            # Handle mint service errors
-            raise HTTPException(
-                status_code=503, detail=f"Mint service unavailable: {str(e)}"
-            )
+        token = await send_token(remaining_balance_sats, "sat")
 
-        # Only for token refunds, we need to manually update balance and delete key
-        key.balance = 0
-        session.add(key)
-        await session.commit()
-        await delete_key_if_zero_balance(key, session)
+        result = {"recipient": None, "msat": remaining_balance_msats, "token": token}
 
-        return {"msats": remaining_balance_msats, "recipient": None, "token": token}
+    await session.delete(key)
+    await session.commit()
+
+    return result
 
 
-@wallet_router.api_route(
+@router.api_route(
     "/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE"],
     include_in_schema=False,
@@ -146,3 +134,8 @@ async def wallet_catch_all(path: str) -> NoReturn:
     raise HTTPException(
         status_code=404, detail="Not found check /docs for available endpoints"
     )
+
+
+balance_router.include_router(router)
+deprecated_wallet_router = APIRouter(prefix="/v1/wallet", include_in_schema=False)
+deprecated_wallet_router.include_router(router)

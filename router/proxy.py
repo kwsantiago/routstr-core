@@ -7,22 +7,21 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
-from router.logging.logging_config import get_logger
-from router.payment.helpers import (
-    UPSTREAM_BASE_URL,
-    check_token_balance,
-    create_error_response,
-    prepare_upstream_headers,
-)
-from router.payment.x_cashu import x_cashu_handler
-
 from .auth import (
     adjust_payment_for_tokens,
     pay_for_request,
     revert_pay_for_request,
     validate_bearer_key,
 )
-from .db import ApiKey, AsyncSession, create_session, get_session
+from .core import get_logger
+from .core.db import ApiKey, AsyncSession, create_session, get_session
+from .payment.helpers import (
+    UPSTREAM_BASE_URL,
+    check_token_balance,
+    create_error_response,
+    prepare_upstream_headers,
+)
+from .payment.x_cashu import x_cashu_handler
 
 logger = get_logger(__name__)
 proxy_router = APIRouter()
@@ -480,18 +479,7 @@ async def proxy(
                 media_type="application/json",
             )
 
-    # Check token balance for all requests to get currency unit
-    try:
-        unit = check_token_balance(headers, request_body_dict)
-        logger.debug(
-            "Token balance check completed", extra={"path": path, "unit": unit}
-        )
-    except HTTPException as e:
-        logger.warning(
-            "Token balance check failed",
-            extra={"path": path, "status_code": e.status_code, "detail": str(e.detail)},
-        )
-        raise
+    check_token_balance(headers, request_body_dict)
 
     # Handle authentication
     if x_cashu := headers.get("x-cashu", None):
