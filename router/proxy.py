@@ -479,18 +479,7 @@ async def proxy(
                 media_type="application/json",
             )
 
-    # Check token balance for all requests to get currency unit
-    try:
-        unit = check_token_balance(headers, request_body_dict)
-        logger.debug(
-            "Token balance check completed", extra={"path": path, "unit": unit}
-        )
-    except HTTPException as e:
-        logger.warning(
-            "Token balance check failed",
-            extra={"path": path, "status_code": e.status_code, "detail": str(e.detail)},
-        )
-        raise
+    check_token_balance(headers, request_body_dict)
 
     # Handle authentication
     if x_cashu := headers.get("x-cashu", None):
