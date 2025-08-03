@@ -89,7 +89,7 @@ async def refund_wallet_endpoint(
         # TODO: choose currency and mint based on what user has configured
         token = await send_token(remaining_balance_sats, "sat")
 
-        result = {"recipient": None, "msat": remaining_balance_msats, "token": token}
+        result = {"msats": remaining_balance_msats, "recipient": None, "token": token}
 
     await session.delete(key)
     await session.commit()
