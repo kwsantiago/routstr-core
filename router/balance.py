@@ -46,38 +46,12 @@ async def topup_wallet_endpoint(
     key: ApiKey = Depends(get_key_from_header),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, int]:
-    # Validate token format first
-    if not cashu_token or not cashu_token.startswith("cashu"):
+    cashu_token = cashu_token.replace("\n", "").replace("\r", "").replace("\t", "")
+    if len(cashu_token) < 10 or "cashu" not in cashu_token:
         raise HTTPException(status_code=400, detail="Invalid token format")
-
-    # Check for obviously invalid tokens
-    if len(cashu_token) < 10:  # Too short to be valid
-        raise HTTPException(status_code=400, detail="Invalid token format")
-
-    # Check for malformed base64 in token
-    if "cashuA" in cashu_token:
-        try:
-            import base64
-
-            # Extract base64 part after 'cashuA'
-            base64_part = cashu_token[6:]
-            if base64_part:
-                # Try to decode - will raise exception if invalid
-                base64.urlsafe_b64decode(base64_part + "=" * (4 - len(base64_part) % 4))
-        except Exception:
-            raise HTTPException(
-                status_code=400, detail="Invalid token format: malformed base64"
-            )
-
-    # Check for newlines or other invalid characters
-    if any(char in cashu_token for char in ["\n", "\r", "\t"]):
-        raise HTTPException(status_code=400, detail="Invalid token format")
-
-    # Try to redeem the token
     try:
         amount_msats = await credit_balance(cashu_token, key, session)
     except ValueError as e:
-        # Token redemption failed (invalid token, already spent, network error, etc.)
         error_msg = str(e)
         if "already spent" in error_msg.lower():
             raise HTTPException(status_code=400, detail="Token already spent")
@@ -86,7 +60,6 @@ async def topup_wallet_endpoint(
         else:
             raise HTTPException(status_code=400, detail="Failed to redeem token")
     except Exception:
-        # Unexpected error
         raise HTTPException(status_code=500, detail="Internal server error")
     return {"msats": amount_msats}
 
