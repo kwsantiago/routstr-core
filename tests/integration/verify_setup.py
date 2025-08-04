@@ -45,7 +45,7 @@ def check_imports() -> bool:
 
         # Check router modules - imports are for verification only
         from router.cashu import Wallet
-        from router.db import ApiKey
+        from router.core.db import ApiKey
 
         del Wallet, ApiKey
 

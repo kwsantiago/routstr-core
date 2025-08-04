@@ -149,7 +149,7 @@ class TestPerformanceBaseline:
         """Test database operation performance"""
         from sqlmodel import select
 
-        from router.db import ApiKey
+        from router.core.db import ApiKey
 
         # Create test data
         for i in range(100):

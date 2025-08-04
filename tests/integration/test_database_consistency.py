@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from router.db import ApiKey
+from router.core.db import ApiKey
 
 
 class TestTransactionAtomicity:

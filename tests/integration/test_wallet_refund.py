@@ -13,7 +13,7 @@ import pytest
 from httpx import AsyncClient
 from sqlmodel import select
 
-from router.db import ApiKey
+from router.core.db import ApiKey
 
 
 @pytest.mark.integration

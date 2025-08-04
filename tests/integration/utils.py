@@ -9,7 +9,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from router.db import ApiKey
+from router.core.db import ApiKey
 
 
 class CashuTokenGenerator:

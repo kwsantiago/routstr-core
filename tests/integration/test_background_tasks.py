@@ -11,7 +11,7 @@ import pytest
 
 import router.cashu
 from router.cashu import check_for_refunds, periodic_payout
-from router.db import ApiKey
+from router.core.db import ApiKey
 from router.models import MODELS, Model, Pricing, update_sats_pricing
 
 

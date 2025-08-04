@@ -28,8 +28,8 @@ os.environ.update(
     }
 )
 
-from router.db import ApiKey, get_session
-from router.main import app, lifespan
+from router.core.db import ApiKey, get_session
+from router.core.main import app, lifespan
 
 
 class TestmintWallet:
@@ -338,19 +338,19 @@ async def integration_app(
         real_wallet = await create_real_mint_wallet()
 
         with (
-            patch("router.db.engine", integration_engine),
-            patch("router.cashu.wallet_instance", real_wallet.wallet),
-            patch("router.cashu.wallet", lambda: real_wallet.wallet),
-            patch("router.cashu.init_wallet", AsyncMock()),
+            patch("router.core.db.engine", integration_engine),
+            patch("router.wallet.wallet_instance", real_wallet.wallet),
+            patch("router.wallet.wallet", lambda: real_wallet.wallet),
+            patch("router.wallet.init_wallet", AsyncMock()),
         ):
             yield test_app
     else:
         # Use mock testmint wallet (current implementation)
-        with patch("router.db.engine", integration_engine):
+        with patch("router.core.db.engine", integration_engine):
             # Set up the test wallet instance
-            import router.cashu
+            import router.wallet
 
-            original_wallet_instance = router.cashu.wallet_instance
+            original_wallet_instance = router.wallet.wallet_instance
 
             # Create a wallet adapter that uses our testmint_wallet
             mock_wallet = AsyncMock()
@@ -362,21 +362,21 @@ async def integration_app(
 
             # Patch the wallet functions to use our test wallet
             with (
-                patch("router.cashu.wallet") as mock_wallet_func,
-                patch("router.cashu.init_wallet") as mock_init_wallet,
+                patch("router.wallet.wallet") as mock_wallet_func,
+                patch("router.wallet.init_wallet") as mock_init_wallet,
             ):
                 # Configure to return our test wallet
                 mock_wallet_func.return_value = mock_wallet
                 mock_init_wallet.return_value = None
 
                 # Set the global wallet_instance
-                router.cashu.wallet_instance = mock_wallet
+                router.wallet.wallet_instance = mock_wallet
 
                 try:
                     yield test_app
                 finally:
                     # Restore original wallet_instance
-                    router.cashu.wallet_instance = original_wallet_instance
+                    router.wallet.wallet_instance = original_wallet_instance
 
 
 @pytest_asyncio.fixture
