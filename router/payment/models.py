@@ -92,10 +92,10 @@ async def update_sats_pricing() -> None:
                 mspp = model.sats_pricing.prompt
                 mspc = model.sats_pricing.completion
                 if model.top_provider:
-                    if cl := model.top_provider.context_length and (
+                    if (cl := model.top_provider.context_length) and (
                         mct := model.top_provider.max_completion_tokens
                     ):
-                        model.sats_pricing.max_cost = cl - mct * mspp + mct * mspc
+                        model.sats_pricing.max_cost = (cl - mct) * mspp + mct * mspc
                     elif cl := model.top_provider.context_length:
                         model.sats_pricing.max_cost = cl * 0.8 * mspp + cl * 0.2 * mspc
                     elif mct := model.top_provider.max_completion_tokens:
