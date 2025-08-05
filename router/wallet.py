@@ -122,10 +122,6 @@ async def send_to_lnurl(amount: int, unit: CurrencyUnit, lnurl: str) -> dict[str
     raise NotImplementedError
 
 
-async def check_for_refunds() -> None:
-    logger.warning("check_for_refunds, temporary not implemented")
-
-
 async def periodic_payout() -> None:
     logger.warning("periodic_payout, temporary not implemented")
 
