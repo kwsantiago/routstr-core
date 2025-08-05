@@ -388,7 +388,7 @@ async def integration_client(
     from httpx import ASGITransport
 
     async with AsyncClient(
-        transport=ASGITransport(app=integration_app),
+        transport=ASGITransport(app=integration_app),  # type: ignore
         base_url="http://test",
         timeout=30.0,
     ) as client:
@@ -564,7 +564,11 @@ async def background_tasks_controller() -> AsyncGenerator[Any, None]:
     original_periodic_payout: Optional[Callable] = None
 
     try:
-        from router.main import check_for_refunds, periodic_payout, update_sats_pricing
+        from router.core.main import (
+            check_for_refunds,
+            periodic_payout,
+            update_sats_pricing,
+        )
 
         async def controlled_update_pricing() -> None:
             while not controller.cancelled:

@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from tests.integration.utils import (
+from .utils import (
     CashuTokenGenerator,
     PerformanceValidator,
     ResponseValidator,
@@ -182,7 +182,7 @@ async def test_concurrent_operations(
 ) -> None:
     """Test handling of concurrent operations"""
 
-    from tests.integration.utils import ConcurrencyTester
+    from .utils import ConcurrencyTester
 
     # Create multiple tokens for concurrent topups
     tokens = []

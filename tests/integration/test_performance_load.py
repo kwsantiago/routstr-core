@@ -14,7 +14,7 @@ import psutil
 import pytest
 from httpx import AsyncClient
 
-from tests.integration.utils import PerformanceValidator
+from .utils import PerformanceValidator
 
 
 class PerformanceMetrics:

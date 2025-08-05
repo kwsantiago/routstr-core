@@ -12,7 +12,8 @@ from httpx import AsyncClient
 from sqlmodel import select
 
 from router.core.db import ApiKey
-from tests.integration.utils import (
+
+from .utils import (
     CashuTokenGenerator,
     ConcurrencyTester,
     ResponseValidator,

@@ -12,7 +12,8 @@ from httpx import AsyncClient
 from sqlmodel import select, update
 
 from router.core.db import ApiKey
-from tests.integration.utils import ConcurrencyTester, ResponseValidator
+
+from .utils import ConcurrencyTester, ResponseValidator
 
 
 @pytest.mark.integration

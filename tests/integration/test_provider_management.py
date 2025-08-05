@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from httpx import AsyncClient
 
-from tests.integration.utils import PerformanceValidator, ResponseValidator
+from .utils import PerformanceValidator, ResponseValidator
 
 
 @pytest.mark.integration
@@ -489,7 +489,7 @@ async def test_providers_endpoint_concurrent_requests(
 ) -> None:
     """Test providers endpoint handles concurrent requests correctly"""
 
-    from tests.integration.utils import ConcurrencyTester
+    from .utils import ConcurrencyTester
 
     mock_events: list[dict[str, Any]] = [
         {

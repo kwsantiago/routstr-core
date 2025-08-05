@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from tests.integration.utils import PerformanceValidator
+from .utils import PerformanceValidator
 
 
 @pytest.mark.integration
@@ -390,7 +390,7 @@ async def test_concurrent_info_endpoint_requests(
 ) -> None:
     """Test concurrent requests to info endpoints don't cause issues"""
 
-    from tests.integration.utils import ConcurrencyTester
+    from .utils import ConcurrencyTester
 
     # Create concurrent requests to all endpoints
     requests = []

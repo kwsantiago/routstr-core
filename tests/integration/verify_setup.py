@@ -20,7 +20,7 @@ def check_imports() -> bool:
 
     try:
         # Check test utilities - imports are for verification only
-        from tests.integration.utils import (
+        from .utils import (
             CashuTokenGenerator,
             ConcurrencyTester,
             DatabaseStateValidator,
@@ -37,17 +37,16 @@ def check_imports() -> bool:
         print("Test utilities imported successfully")
 
         # Check conftest fixtures - imports are for verification only
-        from tests.integration.conftest import DatabaseSnapshot, TestmintWallet
+        from .conftest import DatabaseSnapshot, TestmintWallet
 
         del DatabaseSnapshot, TestmintWallet
 
         print("Conftest fixtures imported successfully")
 
         # Check router modules - imports are for verification only
-        from router.cashu import Wallet
         from router.core.db import ApiKey
 
-        del Wallet, ApiKey
+        del ApiKey
 
         print("Router modules imported successfully")
 
@@ -121,7 +120,7 @@ def demonstrate_token_generation() -> bool:
     print("\nDemonstrating token generation...")
 
     try:
-        from tests.integration.utils import CashuTokenGenerator
+        from .utils import CashuTokenGenerator
 
         # Generate a valid token
         token = CashuTokenGenerator.generate_token(1000, memo="Demo token")
@@ -147,7 +146,7 @@ def demonstrate_testmint_wallet() -> bool:
     try:
         import asyncio
 
-        from tests.integration.conftest import TestmintWallet
+        from .conftest import TestmintWallet
 
         async def test_wallet() -> bool:
             wallet = TestmintWallet()

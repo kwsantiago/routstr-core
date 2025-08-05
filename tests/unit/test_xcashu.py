@@ -11,6 +11,7 @@ async def test_x_cashu_balance() -> None:
         transport=ASGITransport(app=app),  # type: ignore
         base_url="http://test",
     ) as client:
+        assert (await client.get("/v1/info")).status_code == 200
         # response = await client.post(
         #     "/v1/chat/completions",
         #     headers={"x-cashu": "cashuA1234567890"},

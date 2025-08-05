@@ -13,7 +13,7 @@ import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from tests.integration.utils import (
+from .utils import (
     ConcurrencyTester,
     PerformanceValidator,
 )
