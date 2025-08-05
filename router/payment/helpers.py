@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Mapping, Optional
+from typing import Optional
 
 from fastapi import HTTPException, Response
 
