@@ -11,7 +11,8 @@ logger = get_logger(__name__)
 
 CurrencyUnit = Literal["sat", "msat"]
 
-TRUSTED_MINTS = os.environ["CASHU_MINTS"].split(",")
+CASHU_MINTS = os.environ.get("CASHU_MINTS", "https://mint.minibits.cash/Bitcoin")
+TRUSTED_MINTS = CASHU_MINTS.split(",")
 PRIMARY_MINT_URL = TRUSTED_MINTS[0]
 
 
