@@ -37,6 +37,7 @@ class TopProvider(BaseModel):
 
 class Model(BaseModel):
     id: str
+    canonical_slug: str
     name: str
     created: int
     description: str
