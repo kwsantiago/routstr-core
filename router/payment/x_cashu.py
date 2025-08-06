@@ -8,12 +8,7 @@ from fastapi.responses import Response, StreamingResponse
 
 from ..core import get_logger
 from ..wallet import CurrencyUnit, recieve_token, send_token
-from .cost_caculation import (
-    CostData,
-    CostDataError,
-    MaxCostData,
-    calculate_cost,
-)
+from .cost_caculation import CostData, CostDataError, MaxCostData, calculate_cost
 from .helpers import (
     UPSTREAM_BASE_URL,
     check_token_balance,
@@ -26,12 +21,12 @@ logger = get_logger(__name__)
 
 
 async def x_cashu_handler(
-    headers,
+    headers: dict,
     request: Request,
     x_cashu_token: str,
     path: str,
-    max_cost_for_model,
-    request_body_dict,
+    max_cost_for_model: int,
+    request_body_dict: dict,
 ) -> Response | StreamingResponse:
     """Handle X-Cashu token payment requests."""
     logger.info(

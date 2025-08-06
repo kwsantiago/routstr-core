@@ -19,6 +19,7 @@ def sample_model() -> Model:
     """Create a sample model for testing."""
     return Model(
         id="test-model",
+        canonical_slug="test/test-model",
         name="Test Model",
         created=1700000000,
         description="A test model",
@@ -121,6 +122,7 @@ async def test_update_sats_pricing_without_top_provider() -> None:
     """Test sats pricing calculation for models without top_provider."""
     model_without_top = Model(
         id="test-model-no-top",
+        canonical_slug="test/test-model-no-top",
         name="Test Model No Top",
         created=1700000000,
         description="A test model without top provider",
