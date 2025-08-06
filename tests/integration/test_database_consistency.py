@@ -114,7 +114,7 @@ class TestTransactionAtomicity:
         initial_balance = api_key.balance
 
         # Mock wallet to fail after token validation
-        with patch("router.cashu.wallet") as mock_wallet_func:
+        with patch("router.wallet.send_token") as mock_wallet_func:
             mock_proof = MagicMock()
             mock_proof.amount = 1000
             mock_wallet = AsyncMock()
@@ -256,7 +256,7 @@ class TestConcurrentOperations:
         await integration_session.commit()
 
         # Mock wallet for topup
-        with patch("router.cashu.wallet") as mock_wallet_func:
+        with patch("router.wallet.send_token") as mock_wallet_func:
             mock_proof = MagicMock()
             mock_proof.amount = 2000
             mock_wallet = AsyncMock()
@@ -521,7 +521,7 @@ class TestPerformance:
             operation_times["select"].append((end - start) * 1000)  # Convert to ms
 
         # Test UPDATE performance (via topup)
-        with patch("router.cashu.wallet") as mock_wallet_func:
+        with patch("router.wallet.send_token") as mock_wallet_func:
             mock_proof = MagicMock()
             mock_proof.amount = 100
             mock_wallet = AsyncMock()

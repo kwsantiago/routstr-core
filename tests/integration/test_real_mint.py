@@ -6,12 +6,21 @@ Run this with USE_REAL_MINT=true after starting a Cashu mint instance.
 import asyncio
 import os
 
-from .real_testmint import create_real_mint_wallet
+try:
+    from .real_testmint import create_real_mint_wallet
+except ImportError:
+    # sixty_nuts not available, tests will be skipped
+    create_real_mint_wallet = None
 
 
 async def test_real_wallet() -> None:
     """Test basic operations with a real Cashu mint wallet"""
     print("Testing real Cashu mint wallet...")
+
+    # Check if sixty_nuts dependency is available
+    if create_real_mint_wallet is None:
+        print("sixty_nuts not available. Skipping real mint tests.")
+        return
 
     # Check if real mint is enabled
     if os.environ.get("USE_REAL_MINT", "false").lower() != "true":

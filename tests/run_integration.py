@@ -39,27 +39,33 @@ def run_command(
     )
 
 
-async def wait_for_mint(url: str, timeout: int = 60) -> bool:
-    """Wait for mint to be ready."""
-    log(f"Waiting for mint at {url}...", "yellow")
+async def wait_for_service(
+    url: str, service_name: str, endpoint: str = "", timeout: int = 60
+) -> bool:
+    """Wait for a service to be ready."""
+    log(f"Waiting for {service_name} at {url}...", "yellow")
 
     start_time = time.time()
     async with httpx.AsyncClient() as client:
         while time.time() - start_time < timeout:
             try:
-                response = await client.get(f"{url}/v1/info", timeout=5.0)
+                full_url = f"{url}{endpoint}" if endpoint else url
+                response = await client.get(full_url, timeout=5.0)
                 if response.status_code == 200:
-                    info = response.json()
-                    if info.get("name"):
-                        log(f"✅ Mint ready: {info.get('name')}", "green")
-                        return True
+                    log(f"✅ {service_name} ready", "green")
+                    return True
             except Exception:
                 pass
 
             await asyncio.sleep(2)
 
-    log(f"❌ Mint at {url} not ready after {timeout}s", "red")
+    log(f"❌ {service_name} at {url} not ready after {timeout}s", "red")
     return False
+
+
+async def wait_for_mint(url: str, timeout: int = 60) -> bool:
+    """Wait for mint to be ready."""
+    return await wait_for_service(url, "Cashu Mint", "/v1/info", timeout)
 
 
 def cleanup_docker() -> None:
@@ -189,8 +195,24 @@ async def main() -> int:
         start_services()
 
         # Wait for services to be ready
-        if not await wait_for_mint("http://localhost:3338"):
-            raise RuntimeError("Mint failed to start properly")
+        services_ready = await asyncio.gather(
+            wait_for_mint("http://localhost:3338"),
+            wait_for_service("http://localhost:3000", "Mock OpenAI", "/"),
+            wait_for_service("http://localhost:8000", "Router", "/"),
+            return_exceptions=True,
+        )
+
+        if not all(services_ready):
+            failed_services = [
+                service
+                for service, ready in zip(
+                    ["Mint", "Mock OpenAI", "Router"], services_ready
+                )
+                if not ready
+            ]
+            raise RuntimeError(
+                f"Services failed to start: {', '.join(failed_services)}"
+            )
 
         # Run tests
         success = run_tests()

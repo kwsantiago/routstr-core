@@ -103,19 +103,54 @@ async def swap_to_primary_mint(
 async def credit_balance(
     cashu_token: str, key: db.ApiKey, session: db.AsyncSession
 ) -> int:
-    amount, unit, mint_url = await recieve_token(cashu_token)
-    if unit == "sat":
-        amount = amount * 1000
-    if mint_url != PRIMARY_MINT_URL:
-        raise ValueError("Mint URL is not supported by this proxy")
-    key.balance += amount
-    session.add(key)
-    await session.commit()
     logger.info(
-        "Cashu token successfully redeemed and stored",
-        extra={"amount": amount, "unit": unit, "mint_url": mint_url},
+        "credit_balance: Starting token redemption",
+        extra={"token_preview": cashu_token[:50]},
     )
-    return amount
+
+    try:
+        amount, unit, mint_url = await recieve_token(cashu_token)
+        logger.info(
+            "credit_balance: Token redeemed successfully",
+            extra={"amount": amount, "unit": unit, "mint_url": mint_url},
+        )
+
+        if unit == "sat":
+            amount = amount * 1000
+            logger.info(
+                "credit_balance: Converted to msat", extra={"amount_msat": amount}
+            )
+
+        if mint_url != PRIMARY_MINT_URL:
+            logger.error(
+                "credit_balance: Mint URL mismatch",
+                extra={"mint_url": mint_url, "primary_mint": PRIMARY_MINT_URL},
+            )
+            raise ValueError("Mint URL is not supported by this proxy")
+
+        logger.info(
+            "credit_balance: Updating balance",
+            extra={"old_balance": key.balance, "credit_amount": amount},
+        )
+        key.balance += amount
+        session.add(key)
+        await session.commit()
+        logger.info(
+            "credit_balance: Balance updated successfully",
+            extra={"new_balance": key.balance},
+        )
+
+        logger.info(
+            "Cashu token successfully redeemed and stored",
+            extra={"amount": amount, "unit": unit, "mint_url": mint_url},
+        )
+        return amount
+    except Exception as e:
+        logger.error(
+            "credit_balance: Error during token redemption",
+            extra={"error": str(e), "error_type": type(e).__name__},
+        )
+        raise
 
 
 async def send_to_lnurl(amount: int, unit: CurrencyUnit, lnurl: str) -> dict[str, int]:

@@ -59,7 +59,7 @@ async def test_root_endpoint_structure_and_performance(
         "description",
         "version",
         "npub",
-        "mint",
+        "mints",
         "http_url",
         "onion_url",
         "models",
@@ -72,7 +72,7 @@ async def test_root_endpoint_structure_and_performance(
     assert isinstance(data["description"], str)
     assert isinstance(data["version"], str)
     assert isinstance(data["npub"], str)
-    assert isinstance(data["mint"], str)
+    assert isinstance(data["mints"], list)
     assert isinstance(data["http_url"], str)
     assert isinstance(data["onion_url"], str)
     assert isinstance(data["models"], list)
@@ -106,7 +106,7 @@ async def test_root_endpoint_environment_variables(
 
     # Check that environment variables are reflected in response
     # These are set in conftest.py
-    assert data["mint"] == "https://mint.minibits.cash/Bitcoin"
+    assert "https://mint.minibits.cash/Bitcoin" in data["mints"]
 
     # Name should have a default value or be configurable
     assert len(data["name"]) > 0

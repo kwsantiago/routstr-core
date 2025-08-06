@@ -23,15 +23,9 @@ class TestNetworkFailureScenarios:
         integration_session: AsyncSession,
     ) -> None:
         """Test behavior when mint service is unavailable"""
-        # Get the existing mock wallet from the fixture
-        from router.cashu import wallet
-
-        mock_wallet = wallet()
-
-        # Temporarily override the send method to simulate failure
-        with patch.object(
-            mock_wallet,
-            "send",
+        # Patch the wallet send function to simulate failure
+        with patch(
+            "router.wallet.send_token",
             AsyncMock(side_effect=ConnectError("Mint service unavailable")),
         ):
             # Try to refund when mint is down

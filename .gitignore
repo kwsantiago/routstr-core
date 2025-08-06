@@ -9,6 +9,8 @@ wallet.sqlite3
 .*wallet.sqlite3
 *models.json
 .cashu
+.relay
+relay-data
 
 compose.override.yml
 
@@ -22,3 +24,4 @@ logs/*
 
 # deployment
 proof_backups
+

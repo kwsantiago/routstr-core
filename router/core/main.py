@@ -26,6 +26,11 @@ __version__ = "0.0.1"
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Application startup initiated", extra={"version": __version__})
 
+    # Initialize task variables to None
+    pricing_task = None
+    refund_task = None
+    payout_task = None
+
     try:
         await init_db()
 
@@ -44,14 +49,21 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     finally:
         logger.info("Application shutdown initiated")
 
-        refund_task.cancel()
-        pricing_task.cancel()
-        payout_task.cancel()
+        # Cancel tasks if they were created
+        if refund_task:
+            refund_task.cancel()
+        if pricing_task:
+            pricing_task.cancel()
+        if payout_task:
+            payout_task.cancel()
 
         try:
-            await asyncio.gather(
-                pricing_task, refund_task, payout_task, return_exceptions=True
-            )
+            # Only gather tasks that were created
+            tasks_to_wait = [
+                task for task in [pricing_task, refund_task, payout_task] if task
+            ]
+            if tasks_to_wait:
+                await asyncio.gather(*tasks_to_wait, return_exceptions=True)
             logger.info("Background tasks stopped successfully")
         except Exception as e:
             logger.error(

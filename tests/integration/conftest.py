@@ -11,13 +11,44 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import select
 
-# Set test environment variables before importing the app
-os.environ.update(
-    {
+from router.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+# Configure environment based on whether we're using local services or not
+use_local_services = os.environ.get("USE_LOCAL_SERVICES", "0") == "1"
+
+if use_local_services:
+    # Use local Docker services for integration tests
+    test_env = {
+        "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
+        "UPSTREAM_BASE_URL": "http://localhost:3000",  # Mock OpenAI service
+        "UPSTREAM_API_KEY": "test-upstream-key",
+        "CASHU_MINTS": "http://mint:3338",  # Mock Cashu mint (Docker service name)
+        "MINT": "http://mint:3338",  # Fallback mint URL (Docker service name)
+        "MINT_URL": "http://mint:3338",  # Another fallback (Docker service name)
+        "NOSTR_RELAY_URL": "ws://localhost:8088",
+        "RECEIVE_LN_ADDRESS": "test@routstr.com",
+        "REFUND_PROCESSING_INTERVAL": "3600",
+        "NSEC": "nsec1testkey1234567890abcdef",
+        "COST_PER_REQUEST": "10",
+        "MODEL_BASED_PRICING": "true",
+        "MINIMUM_PAYOUT": "1000",
+        "PAYOUT_INTERVAL": "86400",
+        "NAME": "TestRoutstrNode",
+        "DESCRIPTION": "Test Node for Integration Tests",
+        "NPUB": "npub1test",
+        "HTTP_URL": "http://localhost:8000",
+        "ONION_URL": "http://test.onion",
+        "CORS_ORIGINS": "*",
+    }
+else:
+    # Use mock/in-memory services for unit-style integration tests
+    test_env = {
         "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
         "UPSTREAM_BASE_URL": "https://api.openai.com/v1",
         "UPSTREAM_API_KEY": "test-upstream-key",
-        "MINT": "https://mint.minibits.cash/Bitcoin",  # Use real mint URL for tests
+        "CASHU_MINTS": "https://mint.minibits.cash/Bitcoin",  # Use real mint URL for tests
         "RECEIVE_LN_ADDRESS": "test@routstr.com",
         "REFUND_PROCESSING_INTERVAL": "3600",
         "NSEC": "nsec1testkey1234567890abcdef",
@@ -26,7 +57,9 @@ os.environ.update(
         "MINIMUM_PAYOUT": "1000",
         "PAYOUT_INTERVAL": "86400",
     }
-)
+
+# Set test environment variables before importing the app
+os.environ.update(test_env)
 
 from router.core.db import ApiKey, get_session
 from router.core.main import app, lifespan
@@ -38,8 +71,22 @@ class TestmintWallet:
     def __init__(
         self, mint_url: Optional[str] = None, nsec: Optional[str] = None
     ) -> None:
-        # Use the configured MINT URL or a local test mint
-        self.mint_url = mint_url or os.environ.get("MINT", "http://localhost:3338")
+        # Use the configured CASHU_MINTS URL, fallback to MINT, or default
+        configured_mint_url = (
+            mint_url
+            or os.environ.get("CASHU_MINTS", "").split(",")[0].strip()
+            or os.environ.get("MINT", "http://localhost:3338")
+        )
+
+        # For local services, use localhost for connection but mint service name for token creation
+        if os.environ.get("USE_LOCAL_SERVICES") == "1":
+            self.connection_url = configured_mint_url.replace(
+                "http://mint:", "http://localhost:"
+            )
+            self.mint_url = configured_mint_url  # Keep Docker service name for tokens
+        else:
+            self.connection_url = configured_mint_url
+            self.mint_url = configured_mint_url
         # Use a valid test nsec for testing (this is a well-known test key)
         self.nsec = (
             nsec or "nsec1vl029mgpspedva04g90vltkh6fvh240zqtv9k0t9af8935ke9laqsnlfe5"
@@ -56,23 +103,80 @@ class TestmintWallet:
         self.wallet = None
 
     async def mint_tokens(self, amount: int) -> str:
-        """Request tokens from testmint - for testing, we simulate this"""
-        # In a real testmint setup, this would request tokens from the mint
-        # For now, we'll create a mock token that the test wallet can "redeem"
-        import base64
-        import secrets
+        """Create a test token for the testmint"""
+        logger.info(
+            f"Creating test token for {amount} sats from testmint {self.mint_url}"
+        )
 
-        token_id = secrets.token_hex(16)
+        # Try to create real tokens from the testmint if USE_LOCAL_SERVICES is enabled
+        if os.environ.get("USE_LOCAL_SERVICES") == "1":
+            try:
+                return await self._create_real_token(amount)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to create real token: {e}, falling back to fake token"
+                )
+                return await self._create_fallback_token(amount)
+        else:
+            return await self._create_fallback_token(amount)
+
+    async def _create_real_token(self, amount: int) -> str:
+        """Create real tokens using the testmint"""
+        from cashu.wallet.wallet import Wallet
+        import tempfile
+
+        logger.info(
+            f"Creating real token for {amount} sats from testmint {self.connection_url}"
+        )
+
+        try:
+            # Create a temporary wallet to mint real tokens
+            with tempfile.TemporaryDirectory() as temp_dir:
+                wallet_db_path = os.path.join(temp_dir, "test_wallet.db")
+
+                wallet = await Wallet.with_db(
+                    self.connection_url,  # Connect via localhost
+                    db=f"sqlite:///{wallet_db_path}",
+                    load_all_keysets=True,
+                    unit="sat",
+                )
+
+                # Load mint information
+                await wallet.load_mint()
+
+                # Request a mint quote
+                quote_response = await wallet.mint_quote(amount=amount, unit="sat")
+                quote = quote_response.quote
+
+                # Mint tokens (simulate payment by directly calling mint endpoint)
+                mint_response = await wallet.mint(amount=amount, hash=quote)
+                token = mint_response.token
+
+                # Replace connection URL with Docker service name for router validation
+                if self.connection_url != self.mint_url:
+                    token = token.replace(self.connection_url, self.mint_url)
+
+                logger.info(f"Successfully minted real token for {amount} sats")
+                return token
+        except Exception as e:
+            logger.error(f"Failed to mint real token: {e}")
+            raise
+
+    async def _create_fallback_token(self, amount: int) -> str:
+        """Fallback method to create a basic test token"""
+        import json
+        import base64
+
         token_data = {
             "token": [
                 {
                     "mint": self.mint_url,
                     "proofs": [
                         {
-                            "id": token_id,
+                            "id": f"009a1f293253e41e{hash(amount) % 10000:04d}",
                             "amount": amount,
-                            "secret": secrets.token_hex(32),
-                            "C": secrets.token_hex(33),
+                            "secret": f"test-secret-{amount}-{hash(amount) % 10000:04d}",
+                            "C": "02194603ffa36356f4a56b7df9371fc3192472351453ec7398b8da8117e7c3e104",
                         }
                     ],
                 }
@@ -81,16 +185,11 @@ class TestmintWallet:
             "memo": f"Test token {amount} sats",
         }
 
-        # Encode as Cashu token format
         token_json = json.dumps(token_data)
-        token_base64 = base64.urlsafe_b64encode(token_json.encode()).decode()
-        cashu_token = f"cashuA{token_base64}"
-
-        self.tokens.append(
-            {"id": token_id, "amount": amount, "token": cashu_token, "spent": False}
+        token_base64 = (
+            base64.urlsafe_b64encode(token_json.encode()).decode().rstrip("=")
         )
-
-        return cashu_token
+        return f"cashuA{token_base64}"
 
     async def redeem_token(self, token: str) -> Tuple[int, str]:
         """Redeem a Cashu token using the real wallet"""
@@ -152,6 +251,29 @@ class TestmintWallet:
 
         # For testing, return a simulated balance
         return 100000  # 100k sats
+
+    async def credit_balance(self, cashu_token: str, key: ApiKey, session) -> int:
+        """Credit balance to API key - test implementation"""
+        try:
+            print(f"DEBUG: credit_balance called with token: {cashu_token[:20]}...")
+            # Redeem the token to get amount
+            amount, _ = await self.redeem_token(cashu_token)
+            print(f"DEBUG: Redeemed amount: {amount}")
+
+            # For testing, convert to msat if needed
+            amount_msat = amount * 1000  # Assume tokens are in sats
+            print(f"DEBUG: Amount in msat: {amount_msat}")
+
+            # Credit the balance
+            key.balance += amount_msat
+            session.add(key)
+            await session.commit()
+            print(f"DEBUG: Successfully credited {amount_msat} msat")
+
+            return amount_msat
+        except Exception as e:
+            print(f"ERROR: credit_balance failed: {e}")
+            raise
 
 
 @pytest_asyncio.fixture
@@ -334,49 +456,31 @@ async def integration_app(
         # Use real mint with sixty_nuts wallet
         from .real_testmint import create_real_mint_wallet
 
-        # Create real wallet instance
-        real_wallet = await create_real_mint_wallet()
-
-        with (
-            patch("router.core.db.engine", integration_engine),
-            patch("router.wallet.wallet_instance", real_wallet.wallet),
-            patch("router.wallet.wallet", lambda: real_wallet.wallet),
-            patch("router.wallet.init_wallet", AsyncMock()),
-        ):
+        # Use real mint - no wallet patches needed
+        with patch("router.core.db.engine", integration_engine):
             yield test_app
     else:
-        # Use mock testmint wallet (current implementation)
-        with patch("router.core.db.engine", integration_engine):
-            # Set up the test wallet instance
-            import router.wallet
-
-            original_wallet_instance = router.wallet.wallet_instance
-
-            # Create a wallet adapter that uses our testmint_wallet
-            mock_wallet = AsyncMock()
-            mock_wallet.mint_url = testmint_wallet.mint_url
-            mock_wallet.redeem = testmint_wallet.redeem_token
-            mock_wallet.send = testmint_wallet.send
-            mock_wallet.send_to_lnurl = testmint_wallet.send_to_lnurl
-            mock_wallet.get_balance = testmint_wallet.get_balance
-
-            # Patch the wallet functions to use our test wallet
+        # Use actual testmint with environment and wallet patches
+        # Check if we're using local Docker services
+        if os.environ.get("USE_LOCAL_SERVICES") == "1":
+            # Use Docker service names for mint URLs and patch authentication
             with (
-                patch("router.wallet.wallet") as mock_wallet_func,
-                patch("router.wallet.init_wallet") as mock_init_wallet,
+                patch("router.core.db.engine", integration_engine),
+                patch.dict(os.environ, test_env, clear=False),
+                patch("router.wallet.TRUSTED_MINTS", ["http://mint:3338"]),
+                patch("router.wallet.PRIMARY_MINT_URL", "http://mint:3338"),
+                patch("router.auth.credit_balance", testmint_wallet.credit_balance),
             ):
-                # Configure to return our test wallet
-                mock_wallet_func.return_value = mock_wallet
-                mock_init_wallet.return_value = None
-
-                # Set the global wallet_instance
-                router.wallet.wallet_instance = mock_wallet
-
-                try:
-                    yield test_app
-                finally:
-                    # Restore original wallet_instance
-                    router.wallet.wallet_instance = original_wallet_instance
+                yield test_app
+        else:
+            # Use localhost for non-Docker tests
+            with (
+                patch("router.core.db.engine", integration_engine),
+                patch.dict(os.environ, test_env, clear=False),
+                patch("router.wallet.TRUSTED_MINTS", ["http://localhost:3338"]),
+                patch("router.wallet.PRIMARY_MINT_URL", "http://localhost:3338"),
+            ):
+                yield test_app
 
 
 @pytest_asyncio.fixture

@@ -206,7 +206,7 @@ async def test_refund_with_lightning_address(
     await db_snapshot.capture()
 
     # Mock wallet.send_to_lnurl
-    with patch("router.cashu.wallet") as mock_wallet_func:
+    with patch("router.wallet.send_token") as mock_wallet_func:
         mock_wallet = AsyncMock()
         mock_wallet.send_to_lnurl = AsyncMock(
             return_value=500
@@ -404,16 +404,14 @@ async def test_mint_unavailability_handling(
 
     # The global mock in conftest.py is already in place,
     # so we need to temporarily modify it
-    import router.cashu
+    import router.wallet
+    from unittest.mock import patch
 
-    original_send = router.cashu.wallet_instance.send  # type: ignore[union-attr]
-
-    try:
-        # Make the send method raise an exception
-        router.cashu.wallet_instance.send = AsyncMock(  # type: ignore[method-assign, union-attr]
-            side_effect=Exception("Mint unavailable: Connection refused")
-        )
-
+    # Make the send_token method raise an exception
+    with patch(
+        "router.wallet.send_token",
+        side_effect=Exception("Mint unavailable: Connection refused"),
+    ):
         # The exception should propagate as a 503 error (Service Unavailable)
         # But we need to handle it properly
         try:
@@ -424,9 +422,6 @@ async def test_mint_unavailability_handling(
         except Exception as e:
             # If the exception propagates, that's also a failure scenario
             assert "Mint unavailable" in str(e)
-    finally:
-        # Restore original mock
-        router.cashu.wallet_instance.send = original_send  # type: ignore[method-assign, union-attr]
 
         # Balance should remain unchanged (transaction should roll back)
         # Note: Current implementation might not handle this perfectly
@@ -537,7 +532,7 @@ async def test_refund_with_expired_key(
     integration_client.headers["Authorization"] = f"Bearer {api_key}"
 
     # Mock the refund to LN address
-    with patch("router.cashu.wallet") as mock_wallet_func:
+    with patch("router.wallet.send_token") as mock_wallet_func:
         mock_wallet = AsyncMock()
         mock_wallet.send_to_lnurl = AsyncMock(return_value=500)  # type: ignore[method-assign]
         mock_wallet_func.return_value = mock_wallet

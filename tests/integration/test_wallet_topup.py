@@ -425,7 +425,7 @@ async def test_network_failure_during_token_verification(  # type: ignore[no-unt
     token = await testmint_wallet.mint_tokens(300)
 
     # Mock wallet.redeem to simulate network failure
-    with patch("router.cashu.wallet") as mock_wallet:
+    with patch("router.wallet.send_token") as mock_wallet:
         mock_wallet.return_value.redeem = AsyncMock(
             side_effect=Exception("Network error: Connection timeout")
         )
