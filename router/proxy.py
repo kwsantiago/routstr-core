@@ -494,8 +494,6 @@ async def proxy(
     max_cost_for_model = get_cost_per_request(
         model=request_body_dict.get("model", None)
     )
-    check_token_balance(headers, request_body_dict, max_cost_for_model)
-
     # Handle authentication
     if x_cashu := headers.get("x-cashu", None):
         logger.info(
@@ -505,9 +503,13 @@ async def proxy(
                 "token_preview": x_cashu[:20] + "..." if len(x_cashu) > 20 else x_cashu,
             },
         )
-        return await x_cashu_handler(request, x_cashu, path)
+        return await x_cashu_handler(
+            headers, request, x_cashu, path, max_cost_for_model, request_body_dict
+        )
 
-    elif auth := headers.get("authorization", None):
+    check_token_balance(headers, request_body_dict, max_cost_for_model)
+
+    if auth := headers.get("authorization", None):
         logger.debug(
             "Processing bearer token authentication",
             extra={

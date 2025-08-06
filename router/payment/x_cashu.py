@@ -16,6 +16,7 @@ from .cost_caculation import (
 )
 from .helpers import (
     UPSTREAM_BASE_URL,
+    check_token_balance,
     create_error_response,
     get_max_cost_for_model,
     prepare_upstream_headers,
@@ -25,7 +26,12 @@ logger = get_logger(__name__)
 
 
 async def x_cashu_handler(
-    request: Request, x_cashu_token: str, path: str
+    headers,
+    request: Request,
+    x_cashu_token: str,
+    path: str,
+    max_cost_for_model,
+    request_body_dict,
 ) -> Response | StreamingResponse:
     """Handle X-Cashu token payment requests."""
     logger.info(
@@ -40,6 +46,7 @@ async def x_cashu_handler(
     )
 
     try:
+        check_token_balance(headers, request_body_dict, max_cost_for_model)
         headers = dict(request.headers)
         amount, unit, mint = await recieve_token(x_cashu_token)
         headers = prepare_upstream_headers(dict(request.headers))
