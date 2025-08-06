@@ -43,7 +43,7 @@ class Model(TypedDict):
 
 OUTPUT_FILE = os.getenv("OUTPUT_FILE", "models.json")
 BASE_URL = os.getenv("BASE_URL", "https://openrouter.ai/api/v1")
-SOURCE = os.getenv("SOURCE", "openai")
+SOURCE = os.getenv("SOURCE")
 
 
 def fetch_openrouter_models(source_filter: str | None = None) -> list[Model]:
@@ -77,7 +77,7 @@ def fetch_openrouter_models(source_filter: str | None = None) -> list[Model]:
 
 
 def main() -> None:
-    source_filter = SOURCE if SOURCE else None
+    source_filter = SOURCE if SOURCE and SOURCE.strip() else None
     models = fetch_openrouter_models(source_filter=source_filter)
 
     print(f"Writing {len(models)} models to {OUTPUT_FILE}")
