@@ -91,7 +91,7 @@ async def update_sats_pricing() -> None:
                 )
                 mspp = model.sats_pricing.prompt
                 mspc = model.sats_pricing.completion
-                if model.top_provider:
+                if (tp:= model.top_provider) and tp.context_length or tp.max_completion_tokens:
                     if (cl := model.top_provider.context_length) and (
                         mct := model.top_provider.max_completion_tokens
                     ):
