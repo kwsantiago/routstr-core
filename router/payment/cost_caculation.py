@@ -98,35 +98,20 @@ def calculate_cost(
             },
         )
 
-        model = None
+        if response_model not in [model.id for model in MODELS]:
+            logger.error(
+                "Invalid model in response",
+                extra={
+                    "response_model": response_model,
+                    "available_models": [model.id for model in MODELS],
+                },
+            )
+            return CostDataError(
+                message=f"Invalid model in response: {response_model}",
+                code="model_not_found",
+            )
 
-        if response_model in [model.id for model in MODELS]:
-            model = next(model for model in MODELS if model.id == response_model)
-        else:
-            canonical_models = []
-            for m in MODELS:
-                if "/" in m.canonical_slug:
-                    canonical_name = m.canonical_slug.split("/", 1)[1]
-                    canonical_models.append((canonical_name, m))
-
-            canonical_dict = {name: m for name, m in canonical_models}
-
-            if response_model in canonical_dict:
-                model = canonical_dict[response_model]
-            else:
-                logger.error(
-                    "Invalid model in response",
-                    extra={
-                        "response_model": response_model,
-                        "available_models": [model.id for model in MODELS],
-                        "available_canonical_models": list(canonical_dict.keys()),
-                    },
-                )
-                return CostDataError(
-                    message=f"Invalid model in response: {response_model}",
-                    code="model_not_found",
-                )
-
+        model = next(model for model in MODELS if model.id == response_model)
         if model.sats_pricing is None:
             logger.error(
                 "Model pricing not defined",
