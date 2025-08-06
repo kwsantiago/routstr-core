@@ -10,7 +10,7 @@ from ..balance import balance_router, deprecated_wallet_router
 from ..discovery import providers_router
 from ..payment.models import MODELS, models_router, update_sats_pricing
 from ..proxy import proxy_router
-from ..wallet import check_for_refunds, periodic_payout
+from ..wallet import periodic_payout
 from .admin import admin_router
 from .db import init_db
 from .logging import get_logger, setup_logging
@@ -19,23 +19,20 @@ from .logging import get_logger, setup_logging
 setup_logging()
 logger = get_logger(__name__)
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Application startup initiated", extra={"version": __version__})
 
-    # Initialize task variables to None
     pricing_task = None
-    refund_task = None
     payout_task = None
 
     try:
         await init_db()
 
         pricing_task = asyncio.create_task(update_sats_pricing())
-        refund_task = asyncio.create_task(check_for_refunds())
         payout_task = asyncio.create_task(periodic_payout())
 
         yield
@@ -49,21 +46,11 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     finally:
         logger.info("Application shutdown initiated")
 
-        # Cancel tasks if they were created
-        if refund_task:
-            refund_task.cancel()
-        if pricing_task:
-            pricing_task.cancel()
-        if payout_task:
-            payout_task.cancel()
+        pricing_task.cancel()
+        payout_task.cancel()
 
         try:
-            # Only gather tasks that were created
-            tasks_to_wait = [
-                task for task in [pricing_task, refund_task, payout_task] if task
-            ]
-            if tasks_to_wait:
-                await asyncio.gather(*tasks_to_wait, return_exceptions=True)
+            await asyncio.gather(pricing_task, payout_task, return_exceptions=True)
             logger.info("Background tasks stopped successfully")
         except Exception as e:
             logger.error(

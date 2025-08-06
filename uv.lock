@@ -1742,7 +1742,7 @@ wheels = [
 [[package]]
 name = "routstr"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "aiosqlite" },
     { name = "cashu" },
@@ -1758,8 +1758,6 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "aiohttp" },
-    { name = "cashu" },
-    { name = "fastapi" },
     { name = "httpx" },
     { name = "mypy" },
     { name = "openai" },
@@ -1768,7 +1766,6 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-benchmark" },
     { name = "pytest-cov" },
-    { name = "rich" },
     { name = "ruff" },
 ]
 
@@ -1788,8 +1785,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "aiohttp", specifier = ">=3.9.0" },
-    { name = "cashu", specifier = ">=0.17.0" },
-    { name = "fastapi", specifier = ">=0.115.14" },
     { name = "httpx", specifier = ">=0.25.2" },
     { name = "mypy", specifier = ">=1.15.0" },
     { name = "openai", specifier = ">=1.76.0" },
@@ -1798,7 +1793,6 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "pytest-benchmark", specifier = ">=4.0.0" },
     { name = "pytest-cov", specifier = ">=6.1.1" },
-    { name = "rich", specifier = ">=14.1.0" },
     { name = "ruff", specifier = ">=0.11.6" },
 ]
 

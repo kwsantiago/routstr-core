@@ -11,6 +11,7 @@ wallet.sqlite3
 .cashu
 .relay
 relay-data
+.dockerignore
 
 compose.override.yml
 

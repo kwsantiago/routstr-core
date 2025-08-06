@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Optional
 
 from fastapi import HTTPException, Response
 
@@ -10,17 +11,12 @@ from .models import MODELS
 
 logger = get_logger(__name__)
 
-UPSTREAM_BASE_URL = os.environ["UPSTREAM_BASE_URL"]
+
+UPSTREAM_BASE_URL = os.environ.get("UPSTREAM_BASE_URL", "")
 UPSTREAM_API_KEY = os.environ.get("UPSTREAM_API_KEY", "")
 
-logger.info(
-    "Payment helpers initialized",
-    extra={
-        "upstream_base_url": UPSTREAM_BASE_URL,
-        "has_upstream_api_key": bool(UPSTREAM_API_KEY),
-        "model_based_pricing": MODEL_BASED_PRICING,
-    },
-)
+if not UPSTREAM_BASE_URL:
+    raise ValueError("Please set the UPSTREAM_BASE_URL environment variable")
 
 
 def get_cost_per_request(model: str | None = None) -> int:
@@ -153,7 +149,9 @@ def get_max_cost_for_model(model: str) -> int:
     return COST_PER_REQUEST
 
 
-def create_error_response(error_type: str, message: str, status_code: int) -> Response:
+def create_error_response(
+    error_type: str, message: str, status_code: int, token: Optional[str] = None
+) -> Response:
     """Create a standardized error response."""
     logger.info(
         "Creating error response",
@@ -164,6 +162,9 @@ def create_error_response(error_type: str, message: str, status_code: int) -> Re
         },
     )
 
+    response_headers = {}
+    if token:
+        response_headers["X-Cashu"] = token
     return Response(
         content=json.dumps(
             {
@@ -176,6 +177,7 @@ def create_error_response(error_type: str, message: str, status_code: int) -> Re
         ),
         status_code=status_code,
         media_type="application/json",
+        headers=dict(response_headers),
     )
 
 
