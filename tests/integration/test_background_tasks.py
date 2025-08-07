@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from router.core.db import ApiKey
-from router.core.main import check_for_refunds, periodic_payout
+from router.wallet import periodic_payout
 from router.payment.models import MODELS, Model, Pricing, update_sats_pricing
 
 
@@ -705,14 +705,14 @@ class TestTaskInteractions:
                 lambda: task_with_cleanup("pricing"),
             ),
             patch(
-                "router.wallet.check_for_refunds", lambda: task_with_cleanup("refund")
+                "router.wallet.periodic_payout", lambda: task_with_cleanup("refund")
             ),
             patch("router.wallet.periodic_payout", lambda: task_with_cleanup("payout")),
         ):
             # Start all tasks
             tasks = [
                 asyncio.create_task(update_sats_pricing()),
-                asyncio.create_task(check_for_refunds()),
+                asyncio.create_task(asyncio.sleep(0.1)),
                 asyncio.create_task(periodic_payout()),
             ]
 

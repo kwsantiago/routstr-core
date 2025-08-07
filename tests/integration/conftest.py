@@ -465,6 +465,7 @@ async def integration_app(
                 patch("router.wallet.TRUSTED_MINTS", ["http://mint:3338"]),
                 patch("router.wallet.PRIMARY_MINT_URL", "http://mint:3338"),
                 patch("router.auth.credit_balance", testmint_wallet.credit_balance),
+                patch("router.wallet.credit_balance", testmint_wallet.credit_balance),
             ):
                 yield test_app
         else:
