@@ -89,6 +89,9 @@ async def test_full_wallet_flow(
         "/v1/wallet/topup", params={"cashu_token": topup_token}
     )
 
+    if topup_response.status_code != 200:
+        print(f"ERROR: Topup failed with status {topup_response.status_code}")
+        print(f"ERROR: Response body: {topup_response.json()}")
     assert topup_response.status_code == 200
     assert topup_response.json()["msats"] == topup_amount * 1000
 

@@ -226,7 +226,7 @@ class TestmintWallet:
         # For testing, create a refund token
         return await self.mint_tokens(amount)
 
-    async def send_token(self, amount: int, unit: str, mint_url: str = None) -> str:
+    async def send_token(self, amount: int, unit: str, mint_url: Optional[str] = None) -> str:
         """Send token with compatible signature for mocking router.wallet.send_token"""
         return await self.send(amount)
 
@@ -275,7 +275,9 @@ class TestmintWallet:
             return amount_msat
         except Exception as e:
             print(f"ERROR: credit_balance failed: {e}")
-            raise
+            import traceback
+            print(f"ERROR: Full traceback: {traceback.format_exc()}")
+            raise ValueError(f"Failed to redeem token: {str(e)}")
 
 
 @pytest_asyncio.fixture
@@ -472,6 +474,7 @@ async def integration_app(
                 patch("router.wallet.PRIMARY_MINT_URL", "http://mint:3338"),
                 patch("router.auth.credit_balance", testmint_wallet.credit_balance),
                 patch("router.wallet.credit_balance", testmint_wallet.credit_balance),
+                patch("router.balance.credit_balance", testmint_wallet.credit_balance),
                 patch("router.wallet.send_token", testmint_wallet.send_token),
                 patch("router.balance.send_token", testmint_wallet.send_token),
             ):

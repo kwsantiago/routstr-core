@@ -105,8 +105,8 @@ async def test_root_endpoint_environment_variables(
     data = response.json()
 
     # Check that environment variables are reflected in response
-    # These are set in conftest.py
-    assert "https://mint.minibits.cash/Bitcoin" in data["mints"]
+    # These are set in conftest.py for test environment
+    assert "http://mint:3338" in data["mints"]
 
     # Name should have a default value or be configurable
     assert len(data["name"]) > 0
