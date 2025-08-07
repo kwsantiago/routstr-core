@@ -226,6 +226,10 @@ class TestmintWallet:
         # For testing, create a refund token
         return await self.mint_tokens(amount)
 
+    async def send_token(self, amount: int, unit: str, mint_url: str = None) -> str:
+        """Send token with compatible signature for mocking router.wallet.send_token"""
+        return await self.send(amount)
+
     async def send_to_lnurl(self, lnurl: str, amount: int) -> int:
         """Send to lightning address - simulated for testing"""
         if not self.wallet:
@@ -468,6 +472,8 @@ async def integration_app(
                 patch("router.wallet.PRIMARY_MINT_URL", "http://mint:3338"),
                 patch("router.auth.credit_balance", testmint_wallet.credit_balance),
                 patch("router.wallet.credit_balance", testmint_wallet.credit_balance),
+                patch("router.wallet.send_token", testmint_wallet.send_token),
+                patch("router.balance.send_token", testmint_wallet.send_token),
             ):
                 yield test_app
         else:

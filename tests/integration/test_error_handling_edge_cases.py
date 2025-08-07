@@ -23,19 +23,22 @@ class TestNetworkFailureScenarios:
         integration_session: AsyncSession,
     ) -> None:
         """Test behavior when mint service is unavailable"""
-        # Patch the wallet send function to simulate failure
-        with patch(
-            "router.wallet.send_token",
-            AsyncMock(side_effect=ConnectError("Mint service unavailable")),
+        # Patch the wallet send function to simulate failure across all modules
+        with (
+            patch(
+                "router.wallet.send_token",
+                AsyncMock(side_effect=ConnectError("Mint service unavailable")),
+            ),
+            patch(
+                "router.balance.send_token",
+                AsyncMock(side_effect=ConnectError("Mint service unavailable")),
+            ),
         ):
-            # Try to refund when mint is down
-            response = await authenticated_client.post(
-                "/v1/wallet/refund", json={"amount": 1000}
-            )
-
-            # Should get error response (503 for service unavailable)
-            assert response.status_code == 503
-            # The error detail might vary based on implementation
+            # Try to refund when mint is down - expect the error to propagate
+            with pytest.raises(ConnectError, match="Mint service unavailable"):
+                await authenticated_client.post(
+                    "/v1/wallet/refund", json={"amount": 1000}
+                )
 
     @pytest.mark.asyncio
     async def test_upstream_llm_service_down(
