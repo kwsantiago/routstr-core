@@ -12,6 +12,7 @@ wallet.sqlite3
 .relay
 relay-data
 .dockerignore
+relay-data
 
 compose.override.yml
 
