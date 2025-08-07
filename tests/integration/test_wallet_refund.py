@@ -404,7 +404,6 @@ async def test_mint_unavailability_handling(
 
     # The global mock in conftest.py is already in place,
     # so we need to temporarily modify it
-    import router.wallet
     from unittest.mock import patch
 
     # Make the send_token method raise an exception

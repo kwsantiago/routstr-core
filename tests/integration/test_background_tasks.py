@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from router.core.db import ApiKey
-from router.wallet import periodic_payout
 from router.payment.models import MODELS, Model, Pricing, update_sats_pricing
+from router.wallet import periodic_payout
 
 
 @pytest.mark.asyncio
@@ -456,7 +456,6 @@ class TestPeriodicPayoutTask:
 
         # Mock wallet balance higher than user balances (indicating revenue)
         wallet_balance = 200000  # 200 sats total
-        expected_revenue = wallet_balance - total_user_balance  # 50 sats revenue
 
         with (
             patch("router.wallet.get_balance", AsyncMock(return_value=wallet_balance)),
@@ -704,9 +703,7 @@ class TestTaskInteractions:
                 "router.payment.models.update_sats_pricing",
                 lambda: task_with_cleanup("pricing"),
             ),
-            patch(
-                "router.wallet.periodic_payout", lambda: task_with_cleanup("refund")
-            ),
+            patch("router.wallet.periodic_payout", lambda: task_with_cleanup("refund")),
             patch("router.wallet.periodic_payout", lambda: task_with_cleanup("payout")),
         ):
             # Start all tasks

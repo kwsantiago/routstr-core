@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -61,8 +61,8 @@ else:
 # Set test environment variables before importing the app
 os.environ.update(test_env)
 
-from router.core.db import ApiKey, get_session
-from router.core.main import app, lifespan
+from router.core.db import ApiKey, get_session  # noqa: E402
+from router.core.main import app, lifespan  # noqa: E402
 
 
 class TestmintWallet:
@@ -113,8 +113,9 @@ class TestmintWallet:
 
     async def _create_real_token(self, amount: int) -> str:
         """Create real tokens using the testmint"""
-        from cashu.wallet.wallet import Wallet
         import tempfile
+
+        from cashu.wallet.wallet import Wallet
 
         logger.info(
             f"Creating real token for {amount} sats from testmint {self.connection_url}"
@@ -155,10 +156,10 @@ class TestmintWallet:
 
     async def _create_fallback_token(self, amount: int) -> str:
         """Fallback method to create a basic test token"""
-        import json
         import base64
-        import time
+        import json
         import random
+        import time
 
         unique_id = int(time.time() * 1000000) + random.randint(1000, 9999)
         token_data = {
@@ -198,7 +199,7 @@ class TestmintWallet:
             token_base64 = token[6:]  # Remove "cashuA" prefix
             # Add padding if necessary
             padding = (4 - len(token_base64) % 4) % 4
-            token_base64 += '=' * padding
+            token_base64 += "=" * padding
             token_json = base64.urlsafe_b64decode(token_base64).decode()
             token_data = json.loads(token_json)
 
@@ -247,7 +248,9 @@ class TestmintWallet:
         # For testing, return a simulated balance
         return 100000  # 100k sats
 
-    async def credit_balance(self, cashu_token: str, key: ApiKey, session) -> int:
+    async def credit_balance(
+        self, cashu_token: str, key: ApiKey, session: AsyncSession
+    ) -> int:
         """Credit balance to API key - test implementation"""
         try:
             print(f"DEBUG: credit_balance called with token: {cashu_token[:20]}...")
@@ -449,7 +452,6 @@ async def integration_app(
 
     if use_real_mint:
         # Use real mint with sixty_nuts wallet
-        from .real_testmint import create_real_mint_wallet
 
         # Use real mint - no wallet patches needed
         with patch("router.core.db.engine", integration_engine):
@@ -660,26 +662,16 @@ async def background_tasks_controller() -> AsyncGenerator[Any, None]:
 
     # Patch background task functions to respect controller
     original_update_pricing: Optional[Callable] = None
-    original_check_refunds: Optional[Callable] = None
     original_periodic_payout: Optional[Callable] = None
 
     try:
-        from router.core.main import (
-            check_for_refunds,
-            periodic_payout,
-            update_sats_pricing,
-        )
+        from router.payment.models import update_sats_pricing
+        from router.wallet import periodic_payout
 
         async def controlled_update_pricing() -> None:
             while not controller.cancelled:
                 if not controller.paused and original_update_pricing:
                     await original_update_pricing()
-                await asyncio.sleep(1)
-
-        async def controlled_check_refunds() -> None:
-            while not controller.cancelled:
-                if not controller.paused and original_check_refunds:
-                    await original_check_refunds()
                 await asyncio.sleep(1)
 
         async def controlled_periodic_payout() -> None:
@@ -690,7 +682,6 @@ async def background_tasks_controller() -> AsyncGenerator[Any, None]:
 
         # Store originals and patch
         original_update_pricing = update_sats_pricing
-        original_check_refunds = check_for_refunds
         original_periodic_payout = periodic_payout
 
     except ImportError:

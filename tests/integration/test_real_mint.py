@@ -10,7 +10,7 @@ try:
     from .real_testmint import create_real_mint_wallet
 except ImportError:
     # sixty_nuts not available, tests will be skipped
-    create_real_mint_wallet = None
+    create_real_mint_wallet = None  # type: ignore
 
 
 async def test_real_wallet() -> None:

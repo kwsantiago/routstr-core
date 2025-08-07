@@ -224,9 +224,10 @@ async def test_malformed_authorization_header(integration_client: AsyncClient) -
         response = await integration_client.get("/v1/wallet/")
 
         # Should return 401 for invalid auth (not 400 in this implementation)
-        assert response.status_code in [400, 401], (
-            f"Malformed header '{auth_value[:20]}...' should fail"
-        )
+        assert response.status_code in [
+            400,
+            401,
+        ], f"Malformed header '{auth_value[:20]}...' should fail"
 
 
 @pytest.mark.integration
