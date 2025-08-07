@@ -110,18 +110,6 @@ def load_models() -> list[Model]:
             print(f"Error loading models from {models_path}: {e}")
             # Fall through to auto-generation
 
-    # Check for example file as fallback
-    example = Path(__file__).resolve().parent.parent.parent / "models.example.json"
-    if example.exists():
-        print(f"Loading models from example file: {example}")
-        try:
-            with example.open("r") as f:
-                data = json.load(f)
-            return [Model(**model) for model in data.get("models", [])]
-        except Exception as e:
-            print(f"Error loading models from {example}: {e}")
-            # Fall through to auto-generation
-
     # Auto-generate models from OpenRouter API
     print("Auto-generating models from OpenRouter API")
     source_filter = os.getenv("SOURCE")
