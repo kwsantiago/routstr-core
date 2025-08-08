@@ -141,40 +141,40 @@ async def test_providers_data_structure_validation(
 ) -> None:
     """Test provider data structure contains expected fields"""
 
-    # Mock comprehensive provider data
+    # Mock RIP-02 provider announcement event
     mock_events: list[dict[str, Any]] = [
         {
             "id": "event1",
-            "content": "Great provider: http://comprehensive-provider.onion",
+            "pubkey": "test_pubkey",
             "created_at": 1234567890,
+            "content": "Comprehensive provider announcement",
+            "tags": [
+                ["d", "provider-123"],
+                ["endpoint", "https://api.provider.example/v1"],
+                ["name", "Comprehensive Provider"],
+                ["description", "A comprehensive AI provider"],
+                ["model", "gpt-3.5-turbo"],
+                ["model", "gpt-4"],
+            ]
         }
     ]
 
-    mock_provider_data = {
-        "id": "provider-123",
-        "name": "Comprehensive Provider",
-        "status": "online",
-        "models": [
-            {
-                "id": "gpt-3.5-turbo",
-                "name": "GPT-3.5 Turbo",
-                "pricing": {"prompt": "0.0015", "completion": "0.002"},
-            },
-            {
-                "id": "gpt-4",
-                "name": "GPT-4",
-                "pricing": {"prompt": "0.03", "completion": "0.06"},
-            },
-        ],
-        "endpoint": "https://api.provider.example/v1",
-        "availability": "99.9%",
+    mock_health_response = {
+        "status_code": 200,
+        "endpoint": "models",
+        "json": {
+            "data": [
+                {"id": "gpt-3.5-turbo", "object": "model"},
+                {"id": "gpt-4", "object": "model"}
+            ]
+        }
     }
 
     with patch(
         "router.discovery.query_nostr_relay_for_providers", return_value=mock_events
     ):
         with patch("router.discovery.fetch_provider_health") as mock_fetch:
-            mock_fetch.return_value = {"status_code": 200, "json": mock_provider_data}
+            mock_fetch.return_value = mock_health_response
 
             response = await integration_client.get("/v1/providers/?include_json=true")
             assert response.status_code == 200
@@ -184,25 +184,24 @@ async def test_providers_data_structure_validation(
 
             # Validate that provider data contains expected fields
             assert len(providers) > 0
-            for provider_dict in providers:
-                url = list(provider_dict.keys())[0]
-                provider_info = provider_dict[url]
-
-                # Expected fields should be present
-                expected_fields = ["name", "status", "models"]
+            for provider_data in providers:
+                # Should have provider and health keys based on actual implementation
+                assert "provider" in provider_data
+                assert "health" in provider_data
+                
+                provider_info = provider_data["provider"]
+                # Expected fields from RIP-02 parser
+                expected_fields = ["id", "name", "endpoint_url", "supported_models"]
                 for field in expected_fields:
-                    if field in mock_provider_data:
-                        assert field in provider_info
+                    assert field in provider_info
 
                 # Validate models structure if present
-                if "models" in provider_info:
-                    models = provider_info["models"]
-                    if isinstance(models, list) and len(models) > 0:
-                        # If models is a list of dictionaries, validate structure
-                        for model in models:
-                            if isinstance(model, dict):
-                                # Model should have id at minimum
-                                assert "id" in model or "name" in model
+                if "supported_models" in provider_info:
+                    models = provider_info["supported_models"]
+                    assert isinstance(models, list)
+                    # Should have the models from the mocked event
+                    assert "gpt-3.5-turbo" in models
+                    assert "gpt-4" in models
 
 
 @pytest.mark.integration
@@ -239,22 +238,34 @@ async def test_providers_endpoint_offline_providers(
     mock_events: list[dict[str, Any]] = [
         {
             "id": "event1",
-            "content": "Provider: http://healthy-provider.onion",
+            "pubkey": "healthy_provider_pubkey",
             "created_at": 1234567890,
+            "content": "Healthy provider announcement",
+            "tags": [
+                ["d", "healthy-provider"],
+                ["endpoint", "http://healthy-provider.onion"],
+                ["name", "Healthy Provider"],
+            ]
         },
         {
             "id": "event2",
-            "content": "Provider: http://offline-provider.onion",
+            "pubkey": "offline_provider_pubkey", 
             "created_at": 1234567891,
+            "content": "Offline provider announcement",
+            "tags": [
+                ["d", "offline-provider"],
+                ["endpoint", "http://offline-provider.onion"],
+                ["name", "Offline Provider"],
+            ]
         },
     ]
 
     # Mock one healthy and one offline provider
     def mock_fetch_provider_health(url: str) -> dict[str, Any]:
         if "healthy" in url:
-            return {"status_code": 200, "json": {"status": "online"}}
+            return {"status_code": 200, "endpoint": "root", "json": {"status": "online"}}
         else:
-            return {"status_code": 500, "json": {"error": "Service unavailable"}}
+            return {"status_code": 500, "endpoint": "error", "json": {"error": "Service unavailable"}}
 
     with patch(
         "router.discovery.query_nostr_relay_for_providers", return_value=mock_events
@@ -272,16 +283,21 @@ async def test_providers_endpoint_offline_providers(
             assert len(data["providers"]) == 2
 
             # Verify that offline providers are still included but marked appropriately
-            for provider_dict in data["providers"]:
-                url = list(provider_dict.keys())[0]
-                provider_info = provider_dict[url]
-
-                if "offline" in url:
-                    # Offline provider should have error information
-                    assert "error" in provider_info
+            for provider_data in data["providers"]:
+                assert "provider" in provider_data
+                assert "health" in provider_data
+                
+                provider_info = provider_data["provider"]
+                health_info = provider_data["health"]
+                
+                if "offline" in provider_info["endpoint_url"]:
+                    # Offline provider should have error information in health
+                    assert health_info["status_code"] == 500
+                    assert "error" in health_info["json"]
                 else:
-                    # Healthy provider should have status info
-                    assert "status" in provider_info or "error" not in provider_info
+                    # Healthy provider should have successful health check
+                    assert health_info["status_code"] == 200
+                    assert "status" in health_info["json"] or "error" not in health_info["json"]
 
 
 @pytest.mark.integration
@@ -291,22 +307,29 @@ async def test_providers_endpoint_duplicate_urls(
 ) -> None:
     """Test providers endpoint handles duplicate URLs correctly"""
 
-    # Mock events with duplicate provider URLs
+    # Mock events with duplicate provider events (same event ID) - should be deduplicated by relay query logic
     mock_events: list[dict[str, Any]] = [
         {
             "id": "event1",
-            "content": "Check out http://provider.onion",
+            "pubkey": "provider_pubkey",
             "created_at": 1234567890,
+            "content": "Provider announcement",
+            "tags": [
+                ["d", "provider-1"],
+                ["endpoint", "http://provider.onion"],
+                ["name", "Provider"],
+            ]
         },
         {
             "id": "event2",
-            "content": "Also try http://provider.onion for good service",
-            "created_at": 1234567891,
-        },
-        {
-            "id": "event3",
-            "content": "Different provider: http://other-provider.onion",
+            "pubkey": "other_provider_pubkey",
             "created_at": 1234567892,
+            "content": "Different provider announcement",
+            "tags": [
+                ["d", "other-provider"],
+                ["endpoint", "http://other-provider.onion"],
+                ["name", "Other Provider"],
+            ]
         },
     ]
 
@@ -314,20 +337,24 @@ async def test_providers_endpoint_duplicate_urls(
         "router.discovery.query_nostr_relay_for_providers", return_value=mock_events
     ):
         with patch("router.discovery.fetch_provider_health") as mock_fetch:
-            mock_fetch.return_value = {"status_code": 200, "json": {"status": "online"}}
+            mock_fetch.return_value = {"status_code": 200, "endpoint": "root", "json": {"status": "online"}}
 
             response = await integration_client.get("/v1/providers/")
 
             assert response.status_code == 200
             data = response.json()
 
-            # Should deduplicate URLs
+            # Should return 2 unique providers based on events
             providers = data["providers"]
-            assert len(providers) == 2  # Only 2 unique URLs
+            assert len(providers) == 2  # 2 unique events
 
-            # Verify no duplicates
-            unique_providers = set(providers)
-            assert len(unique_providers) == len(providers)
+            # Verify all providers are unique by endpoint_url
+            endpoint_urls = []
+            for provider_data in providers:
+                endpoint_urls.append(provider_data["endpoint_url"])
+            
+            unique_endpoints = set(endpoint_urls)
+            assert len(unique_endpoints) == len(endpoint_urls)
 
 
 @pytest.mark.integration

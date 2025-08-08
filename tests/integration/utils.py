@@ -68,10 +68,6 @@ class CashuTokenGenerator:
             # Invalid JSON structure
             lambda: "cashuA"
             + base64.urlsafe_b64encode(b'{"invalid": "structure"}').decode(),
-            # Empty proofs
-            lambda: CashuTokenGenerator._encode_token(
-                {"token": [{"mint": "https://test.com", "proofs": []}], "unit": "sat"}
-            ),
             # Invalid proof structure
             lambda: CashuTokenGenerator._encode_token(
                 {

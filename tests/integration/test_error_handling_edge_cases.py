@@ -34,11 +34,10 @@ class TestNetworkFailureScenarios:
                 AsyncMock(side_effect=ConnectError("Mint service unavailable")),
             ),
         ):
-            # Try to refund when mint is down - expect the error to propagate
-            with pytest.raises(ConnectError, match="Mint service unavailable"):
-                await authenticated_client.post(
-                    "/v1/wallet/refund", json={"amount": 1000}
-                )
+            # Try to refund when mint is down - should return 503 status
+            response = await authenticated_client.post("/v1/wallet/refund")
+            assert response.status_code == 503
+            assert "Mint service unavailable" in response.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_upstream_llm_service_down(

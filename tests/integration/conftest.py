@@ -276,10 +276,21 @@ class TestmintWallet:
             amount_msat = amount * 1000  # Assume tokens are in sats
             logger.info(f"TestmintWallet.credit_balance amount in msat: {amount_msat}")
 
-            # Credit the balance
-            key.balance += amount_msat
-            session.add(key)
+            # Credit the balance using atomic database update to prevent race conditions
+            from sqlmodel import update
+            
+            # Use atomic update to avoid lost update problem in concurrent scenarios
+            stmt = (
+                update(ApiKey)
+                .where(ApiKey.hashed_key == key.hashed_key)
+                .values(balance=ApiKey.balance + amount_msat)
+            )
+            await session.execute(stmt)
             await session.commit()
+            
+            # Refresh the key object to get the updated balance
+            await session.refresh(key)
+            
             logger.info(f"TestmintWallet.credit_balance successfully credited {amount_msat} msat")
 
             return amount_msat

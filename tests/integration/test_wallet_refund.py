@@ -14,6 +14,7 @@ from httpx import AsyncClient
 from sqlmodel import select
 
 from router.core.db import ApiKey
+from router.wallet import CurrencyUnit
 
 
 @pytest.mark.integration
@@ -205,13 +206,14 @@ async def test_refund_with_lightning_address(
     # Capture state
     await db_snapshot.capture()
 
-    # Mock wallet.send_to_lnurl
-    with patch("router.wallet.send_token") as mock_wallet_func:
-        mock_wallet = AsyncMock()
-        mock_wallet.send_to_lnurl = AsyncMock(
-            return_value=500
-        )  # Return amount sent  # type: ignore[method-assign]
-        mock_wallet_func.return_value = mock_wallet
+    # Mock send_to_lnurl function directly
+    with patch("router.balance.send_to_lnurl") as mock_send_to_lnurl:
+        mock_send_to_lnurl.return_value = {
+            "amount_sent": balance,
+            "unit": "msat",
+            "lnurl": refund_address,
+            "status": "completed"
+        }
 
         # Request refund
         integration_client.headers["Authorization"] = f"Bearer {api_key}"
@@ -225,10 +227,11 @@ async def test_refund_with_lightning_address(
         assert data["msats"] == balance
         assert "token" not in data
 
-        # Verify send_to_lnurl was called
-        mock_wallet.send_to_lnurl.assert_called_once_with(
-            refund_address,
-            amount=500,  # 500 sats
+        # Verify send_to_lnurl was called with correct parameters
+        mock_send_to_lnurl.assert_called_once_with(
+            balance,  # amount in msats
+            CurrencyUnit.msat,  # unit
+            refund_address,  # lnurl
         )
 
     # Verify key was deleted by trying to use it
@@ -408,7 +411,7 @@ async def test_mint_unavailability_handling(
 
     # Make the send_token method raise an exception
     with patch(
-        "router.wallet.send_token",
+        "router.balance.send_token",
         side_effect=Exception("Mint unavailable: Connection refused"),
     ):
         # The exception should propagate as a 503 error (Service Unavailable)
