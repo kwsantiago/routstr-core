@@ -2,7 +2,7 @@ import os
 from typing import Literal
 
 from cashu.core.base import Token
-from cashu.wallet.helpers import deserialize_token_from_string, send
+from cashu.wallet.helpers import deserialize_token_from_string
 from cashu.wallet.wallet import Wallet
 
 from .core import db, get_logger
@@ -53,13 +53,18 @@ async def send_token(
     amount: int, unit: CurrencyUnit, mint_url: str | None = None
 ) -> str:
     wallet = await Wallet.with_db(
-        mint_url or PRIMARY_MINT_URL,
-        db=".wallet",
-        load_all_keysets=True,
-        unit=unit,
+        mint_url or PRIMARY_MINT_URL, db=".wallet", load_all_keysets=True, unit=unit
     )
-    balance, token = await send(wallet, amount=amount, lock="", legacy=False)
-    return token
+    await wallet.load_mint()
+    await wallet.load_proofs()
+    proofs = wallet._get_proofs_per_keyset(wallet.proofs)[wallet.keyset_id]
+
+    send_proofs, fees = await wallet.select_to_send(
+        proofs, amount, set_reserved=True, include_fees=True
+    )
+    return await wallet.serialize_proofs(
+        send_proofs, include_dleq=False, legacy=False, memo=None
+    )
 
 
 async def swap_to_primary_mint(
