@@ -3,6 +3,12 @@ __pycache__
 keys.db
 wallet.sqlite3
 
+# Python build artifacts
+*.egg-info/
+build/
+dist/
+*.egg
+
 # Development 
 .notes
 .*keys.db

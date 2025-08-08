@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Payment proxy for your LLM endpoint using cashu and nostr."
 readme = "README.md"
 requires-python = ">=3.11"
+
 dependencies = [
     "fastapi[standard]>=0.115",
     "aiosqlite>=0.20",
@@ -28,6 +29,7 @@ dev = [
     "psutil>=5.9.0",
     "aiohttp>=3.9.0",
     "pytest-benchmark>=4.0.0",
+    "routstr",
 ]
 
 [tool.pytest.ini_options]
@@ -68,3 +70,9 @@ disallow_untyped_decorators = true
 
 [tool.uv.sources]
 secp256k1 = { git = "https://github.com/saschanaz/secp256k1-py", branch = "upgrade060" }
+routstr = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    ".",
+]

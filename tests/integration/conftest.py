@@ -48,7 +48,7 @@ else:
         "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
         "UPSTREAM_BASE_URL": "https://api.openai.com/v1",
         "UPSTREAM_API_KEY": "test-upstream-key",
-        "CASHU_MINTS": "https://mint.minibits.cash/Bitcoin",  # Use real mint URL for tests
+        "CASHU_MINTS": "http://localhost:3338",  # Use test mint URL
         "RECEIVE_LN_ADDRESS": "test@routstr.com",
         "REFUND_PROCESSING_INTERVAL": "3600",
         "NSEC": "nsec1testkey1234567890abcdef",
@@ -184,8 +184,8 @@ class TestmintWallet:
         token_base64 = base64.urlsafe_b64encode(token_json.encode()).decode()
         return f"cashuA{token_base64}"
 
-    async def redeem_token(self, token: str) -> Tuple[int, str]:
-        """Redeem a Cashu token using the real wallet"""
+    async def redeem_token(self, token: str) -> Tuple[int, str, str]:
+        """Redeem a Cashu token - compatible with wallet.recieve_token"""
         if not self.wallet:
             await self.init()
 
@@ -204,7 +204,11 @@ class TestmintWallet:
             token_data = json.loads(token_json)
 
             total_amount = 0
+            mint_url = self.mint_url
+            unit = token_data.get("unit", "sat")
+            
             for mint_tokens in token_data["token"]:
+                mint_url = mint_tokens.get("mint", self.mint_url)
                 for proof in mint_tokens["proofs"]:
                     # Check if token was already spent
                     if proof["id"] in self.spent_tokens:
@@ -213,10 +217,15 @@ class TestmintWallet:
                     self.spent_tokens.append(proof["id"])
                     total_amount += proof["amount"]
 
-            return total_amount, "test_metadata"
+            return total_amount, unit, mint_url
 
         except Exception as e:
             raise ValueError(f"Failed to decode token: {str(e)}")
+    
+    async def redeem_token_simple(self, token: str) -> Tuple[int, str]:
+        """Redeem a Cashu token - simple version for credit_balance"""
+        amount, unit, mint_url = await self.redeem_token(token)
+        return amount, "test_metadata"
 
     async def send(self, amount: int) -> str:
         """Create a token to send (for refunds)"""
@@ -257,26 +266,27 @@ class TestmintWallet:
     ) -> int:
         """Credit balance to API key - test implementation"""
         try:
-            print(f"DEBUG: credit_balance called with token: {cashu_token[:20]}...")
+            logger.info(f"TestmintWallet.credit_balance called with token: {cashu_token[:20]}...")
+            
             # Redeem the token to get amount
-            amount, _ = await self.redeem_token(cashu_token)
-            print(f"DEBUG: Redeemed amount: {amount}")
+            amount, _ = await self.redeem_token_simple(cashu_token)
+            logger.info(f"TestmintWallet.credit_balance redeemed amount: {amount}")
 
             # For testing, convert to msat if needed
             amount_msat = amount * 1000  # Assume tokens are in sats
-            print(f"DEBUG: Amount in msat: {amount_msat}")
+            logger.info(f"TestmintWallet.credit_balance amount in msat: {amount_msat}")
 
             # Credit the balance
             key.balance += amount_msat
             session.add(key)
             await session.commit()
-            print(f"DEBUG: Successfully credited {amount_msat} msat")
+            logger.info(f"TestmintWallet.credit_balance successfully credited {amount_msat} msat")
 
             return amount_msat
         except Exception as e:
-            print(f"ERROR: credit_balance failed: {e}")
+            logger.error(f"TestmintWallet.credit_balance failed: {e}")
             import traceback
-            print(f"ERROR: Full traceback: {traceback.format_exc()}")
+            logger.error(f"TestmintWallet.credit_balance full traceback: {traceback.format_exc()}")
             raise ValueError(f"Failed to redeem token: {str(e)}")
 
 
@@ -457,37 +467,35 @@ async def integration_app(
     use_real_mint = os.environ.get("USE_REAL_MINT", "false").lower() == "true"
 
     if use_real_mint:
-        # Use real mint with sixty_nuts wallet
-
         # Use real mint - no wallet patches needed
         with patch("router.core.db.engine", integration_engine):
             yield test_app
     else:
-        # Use actual testmint with environment and wallet patches
-        # Check if we're using local Docker services
-        if os.environ.get("USE_LOCAL_SERVICES") == "1":
-            # Use Docker service names for mint URLs and patch authentication
-            with (
-                patch("router.core.db.engine", integration_engine),
-                patch.dict(os.environ, test_env, clear=False),
-                patch("router.wallet.TRUSTED_MINTS", ["http://mint:3338"]),
-                patch("router.wallet.PRIMARY_MINT_URL", "http://mint:3338"),
-                patch("router.auth.credit_balance", testmint_wallet.credit_balance),
-                patch("router.wallet.credit_balance", testmint_wallet.credit_balance),
-                patch("router.balance.credit_balance", testmint_wallet.credit_balance),
-                patch("router.wallet.send_token", testmint_wallet.send_token),
-                patch("router.balance.send_token", testmint_wallet.send_token),
-            ):
-                yield test_app
-        else:
-            # Use localhost for non-Docker tests
-            with (
-                patch("router.core.db.engine", integration_engine),
-                patch.dict(os.environ, test_env, clear=False),
-                patch("router.wallet.TRUSTED_MINTS", ["http://localhost:3338"]),
-                patch("router.wallet.PRIMARY_MINT_URL", "http://localhost:3338"),
-            ):
-                yield test_app
+        # Use testmint with wallet patches for all integration tests
+        mint_url = test_env.get("CASHU_MINTS", "http://localhost:3338")
+        with (
+            patch("router.core.db.engine", integration_engine),
+            patch.dict(os.environ, test_env, clear=False),
+            patch("router.wallet.TRUSTED_MINTS", [mint_url]),
+            patch("router.wallet.PRIMARY_MINT_URL", mint_url),
+            patch("router.auth.credit_balance", testmint_wallet.credit_balance),
+            patch("router.wallet.credit_balance", testmint_wallet.credit_balance),
+            patch("router.balance.credit_balance", testmint_wallet.credit_balance),
+            patch("router.wallet.send_token", testmint_wallet.send_token),
+            patch("router.balance.send_token", testmint_wallet.send_token),
+            patch("router.wallet.recieve_token", testmint_wallet.redeem_token),
+            patch("router.wallet.get_balance", testmint_wallet.get_balance),
+            patch("websockets.connect") as mock_websockets,
+            patch("router.payment.price.btc_usd_ask_price", return_value=50000.0),
+            patch("router.payment.price.sats_usd_ask_price", return_value=0.0005),
+        ):
+            # Configure the WebSocket mock for discovery service - fast failure for performance tests
+            async def mock_websocket_connect(*args: Any, **kwargs: Any) -> None:
+                raise ConnectionError("Mock connection failed")
+            
+            mock_websockets.side_effect = mock_websocket_connect
+            
+            yield test_app
 
 
 @pytest_asyncio.fixture

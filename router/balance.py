@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from .auth import validate_bearer_key
 from .core.db import ApiKey, AsyncSession, get_session
-from .wallet import credit_balance, send_to_lnurl, send_token
+from .wallet import CurrencyUnit, credit_balance, send_to_lnurl, send_token
 
 router = APIRouter()
 balance_router = APIRouter(prefix="/v1/balance")
@@ -76,7 +76,7 @@ async def refund_wallet_endpoint(
 
     # Perform refund operation first, before modifying balance
     if key.refund_address:
-        await send_to_lnurl(remaining_balance_msats, "msat", key.refund_address)
+        await send_to_lnurl(remaining_balance_msats, CurrencyUnit.msat, key.refund_address)
         result = {"recipient": key.refund_address, "msat": remaining_balance_msats}
     else:
         # Convert msats to sats for cashu wallet
