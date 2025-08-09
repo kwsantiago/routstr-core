@@ -5,7 +5,7 @@ Tests POST /v1/wallet/topup endpoint with various token scenarios and edge cases
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient
