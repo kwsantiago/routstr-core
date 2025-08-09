@@ -26,7 +26,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Lowercase and set image tag
-        run: echo "IMAGE_TAG=ghcr.io/$(echo $GITHUB_REPOSITORY | tr '[:upper:]' '[:lower:]'):latest" >> $GITHUB_ENV
+        run: echo "IMAGE_TAG=ghcr.io/proxy:latest" >> $GITHUB_ENV
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
