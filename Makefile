@@ -7,14 +7,16 @@ ifeq ($(VENV_EXISTS), 1)
     PYTEST := .venv/bin/pytest
     RUFF := .venv/bin/ruff
     MYPY := .venv/bin/mypy
+    ALEMBIC := .venv/bin/alembic
 else
     PYTHON := python
     PYTEST := pytest
     RUFF := ruff
     MYPY := mypy
+    ALEMBIC := alembic
 endif
 
-.PHONY: help setup test test-unit test-integration test-integration-docker test-all test-fast test-performance clean docker-up docker-down lint format type-check dev-setup check-deps
+.PHONY: help setup test test-unit test-integration test-integration-docker test-all test-fast test-performance clean docker-up docker-down lint format type-check dev-setup check-deps db-upgrade db-downgrade db-current db-history db-migrate db-revision db-heads db-clean
 
 # Default target
 help:
@@ -35,6 +37,11 @@ help:
 	@echo "  make dev-setup          - Set up development environment"
 	@echo "  make check-deps         - Check system dependencies"
 	@echo "  make setup              - First-time project setup"
+	@echo ""
+	@echo "Database migration shortcuts:"
+	@echo "  make create-migration   - Auto-generate new migration"
+	@echo "  make db-upgrade         - Apply all pending migrations"
+	@echo "  make db-downgrade       - Downgrade one migration"
 
 # First-time setup
 setup: check-deps dev-setup
@@ -133,6 +140,7 @@ check-deps:
 	@printf "  %-18s" "pytest:"; if $(PYTEST) --version >/dev/null 2>&1; then $(PYTEST) --version | head -1; else echo "❌ Not found - run 'make dev-setup'"; fi
 	@printf "  %-18s" "ruff:"; if $(RUFF) --version >/dev/null 2>&1; then $(RUFF) --version; else echo "❌ Not found - run 'make dev-setup'"; fi
 	@printf "  %-18s" "mypy:"; if $(MYPY) --version >/dev/null 2>&1; then $(MYPY) --version; else echo "❌ Not found - run 'make dev-setup'"; fi
+	@printf "  %-18s" "alembic:"; if $(ALEMBIC) --version >/dev/null 2>&1; then $(ALEMBIC) --version; else echo "❌ Not found - run 'make dev-setup'"; fi
 	@echo ""
 	@echo "Virtual environment:"
 	@if [ -d ".venv" ]; then \
@@ -157,6 +165,46 @@ clean:
 	rm -rf build/
 	rm -rf *.egg-info
 	@echo "✨ Cleanup complete!"
+
+# Database migration management
+db-upgrade:
+	@echo "⬆️  Applying all pending migrations..."
+	$(ALEMBIC) upgrade head
+	@echo "✅ Database upgraded to latest revision"
+
+db-downgrade:
+	@echo "⬇️  Downgrading one migration..."
+	$(ALEMBIC) downgrade -1
+	@echo "✅ Database downgraded by one revision"
+
+db-current:
+	@echo "📍 Current database revision:"
+	$(ALEMBIC) current -v
+
+db-history:
+	@echo "📜 Migration history:"
+	$(ALEMBIC) history --verbose
+
+db-migrate:
+	@echo "🔍 Auto-generating migration from model changes..."
+	@read -p "Enter migration message: " msg; \
+	$(ALEMBIC) revision --autogenerate -m "$$msg"
+	@echo "✅ Migration generated. Review and edit if needed."
+
+db-revision:
+	@echo "📝 Creating empty migration file..."
+	@read -p "Enter migration message: " msg; \
+	$(ALEMBIC) revision -m "$$msg"
+	@echo "✅ Empty migration created"
+
+db-heads:
+	@echo "🎯 Current migration heads:"
+	$(ALEMBIC) heads
+
+db-clean:
+	@echo "🧹 Cleaning migration cache files..."
+	find migrations/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@echo "✅ Migration cache cleaned"
 
 # Advanced testing options
 test-coverage:
