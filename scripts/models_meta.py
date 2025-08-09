@@ -1,7 +1,9 @@
-import httpx
+#!/usr/bin/env python3
+
 import json
-import asyncio
+import os
 from typing import TypedDict
+from urllib.request import urlopen
 
 
 class ModelArchitecture(TypedDict):
@@ -39,19 +41,33 @@ class Model(TypedDict):
     per_request_limits: dict | None
 
 
-async def fetch_openrouter_models() -> list[Model]:
+OUTPUT_FILE = os.getenv("OUTPUT_FILE", "models.json")
+BASE_URL = os.getenv("BASE_URL", "https://openrouter.ai/api/v1")
+SOURCE = os.getenv("SOURCE")
+
+
+def fetch_openrouter_models(source_filter: str | None = None) -> list[Model]:
     """Fetches model information from OpenRouter API."""
-    async with httpx.AsyncClient() as client:
-        response = await client.get("https://openrouter.ai/api/v1/models")
-        response.raise_for_status()
-        data = response.json()
+    with urlopen(f"{BASE_URL}/models") as response:
+        data = json.loads(response.read().decode("utf-8"))
 
         models_data: list[Model] = []
         for model in data.get("data", []):
-            # Skip models with '(free)' in the name or id = 'openrouter/auto'
+            model_id = model.get("id", "")
+
+            if source_filter:
+                source_prefix = f"{source_filter}/"
+                if not model_id.startswith(source_prefix):
+                    continue
+
+                model = dict(model)
+                model["id"] = model_id[len(source_prefix) :]
+                model_id = model["id"]
+
             if (
                 "(free)" in model.get("name", "")
-                or model.get("id") == "openrouter/auto"
+                or model_id == "openrouter/auto"
+                or model_id == "google/gemini-2.5-pro-exp-03-25"
             ):
                 continue
 
@@ -60,15 +76,15 @@ async def fetch_openrouter_models() -> list[Model]:
         return models_data
 
 
-async def main() -> None:
-    models = await fetch_openrouter_models()
+def main() -> None:
+    source_filter = SOURCE if SOURCE and SOURCE.strip() else None
+    models = fetch_openrouter_models(source_filter=source_filter)
 
-    # Print the first model data in a nicely indented JSON format
-    print(json.dumps(models[0], indent=4))
+    print(f"Writing {len(models)} models to {OUTPUT_FILE}")
 
-    with open("or-models.json", "w") as f:
+    with open(OUTPUT_FILE, "w") as f:
         json.dump({"models": models}, f, indent=4)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

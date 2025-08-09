@@ -5,12 +5,15 @@ services:
     build: .
     volumes:
       - .:/app
+      - ./logs:/app/logs
     env_file:
       - .env
     environment:
       - TOR_PROXY_URL=socks5://tor:9050
     ports:
       - 8000:8000
+    extra_hosts: # Needed to access locally running models
+      - "host.docker.internal:host-gateway"
 
   tor:
     image: ghcr.io/hundehausen/tor-hidden-service:latest
