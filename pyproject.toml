@@ -53,6 +53,8 @@ markers = [
     "unit: marks tests as unit tests",
     "slow: marks tests as slow running (deselect with '-m \"not slow\"')",
     "requires_real_mint: marks tests that require a running Cashu mint instance",
+    "requires_docker: marks tests that require Docker services running (deselect with '-m \"not requires_docker\"')",
+    "performance: marks tests that measure performance metrics",
 ]
 
 [tool.ruff.lint]
@@ -73,6 +75,4 @@ secp256k1 = { git = "https://github.com/saschanaz/secp256k1-py", branch = "upgra
 routstr = { workspace = true }
 
 [tool.uv.workspace]
-members = [
-    ".",
-]
+members = ["."]

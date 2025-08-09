@@ -15,18 +15,19 @@ from router.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Configure environment based on whether we're using local services or not
+# Configure test environment based on whether we're using local services or not
 use_local_services = os.environ.get("USE_LOCAL_SERVICES", "0") == "1"
 
 if use_local_services:
-    # Use local Docker services for integration tests
+    # Docker mode: Use Docker services for more realistic testing
+    logger.info("🐳 Using Docker services for integration tests")
     test_env = {
         "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
         "UPSTREAM_BASE_URL": "http://localhost:3000",  # Mock OpenAI service
         "UPSTREAM_API_KEY": "test-upstream-key",
-        "CASHU_MINTS": "http://mint:3338",  # Mock Cashu mint (Docker service name)
-        "MINT": "http://mint:3338",  # Fallback mint URL (Docker service name)
-        "MINT_URL": "http://mint:3338",  # Another fallback (Docker service name)
+        "CASHU_MINTS": "http://mint:3338",  # Docker service name for router validation
+        "MINT": "http://mint:3338",
+        "MINT_URL": "http://mint:3338",
         "NOSTR_RELAY_URL": "ws://localhost:8088",
         "RECEIVE_LN_ADDRESS": "test@routstr.com",
         "REFUND_PROCESSING_INTERVAL": "3600",
@@ -43,12 +44,13 @@ if use_local_services:
         "CORS_ORIGINS": "*",
     }
 else:
-    # Use mock/in-memory services for unit-style integration tests
+    # Mock mode: Use in-memory mocks for fast testing
+    logger.info("🎭 Using mocked services for integration tests")
     test_env = {
         "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
         "UPSTREAM_BASE_URL": "https://api.openai.com/v1",
         "UPSTREAM_API_KEY": "test-upstream-key",
-        "CASHU_MINTS": "http://localhost:3338",  # Use test mint URL
+        "CASHU_MINTS": "http://localhost:3338",
         "RECEIVE_LN_ADDRESS": "test@routstr.com",
         "REFUND_PROCESSING_INTERVAL": "3600",
         "NSEC": "nsec1testkey1234567890abcdef",
@@ -63,6 +65,17 @@ os.environ.update(test_env)
 
 from router.core.db import ApiKey, get_session  # noqa: E402
 from router.core.main import app, lifespan  # noqa: E402
+
+
+@pytest.fixture(scope="session")
+def test_mode() -> str:
+    """Returns current test mode for clarity"""
+    if os.environ.get("USE_LOCAL_SERVICES") == "1":
+        print("\n🐳 Running with Docker services (realistic mode)")
+        return "docker"
+    else:
+        print("\n🎭 Running with mocked services (fast mode)")
+        return "mock"
 
 
 class TestmintWallet:
@@ -206,7 +219,7 @@ class TestmintWallet:
             total_amount = 0
             mint_url = self.mint_url
             unit = token_data.get("unit", "sat")
-            
+
             for mint_tokens in token_data["token"]:
                 mint_url = mint_tokens.get("mint", self.mint_url)
                 for proof in mint_tokens["proofs"]:
@@ -221,7 +234,7 @@ class TestmintWallet:
 
         except Exception as e:
             raise ValueError(f"Failed to decode token: {str(e)}")
-    
+
     async def redeem_token_simple(self, token: str) -> Tuple[int, str]:
         """Redeem a Cashu token - simple version for credit_balance"""
         amount, unit, mint_url = await self.redeem_token(token)
@@ -235,7 +248,9 @@ class TestmintWallet:
         # For testing, create a refund token
         return await self.mint_tokens(amount)
 
-    async def send_token(self, amount: int, unit: str, mint_url: Optional[str] = None) -> str:
+    async def send_token(
+        self, amount: int, unit: str, mint_url: Optional[str] = None
+    ) -> str:
         """Send token with compatible signature for mocking router.wallet.send_token"""
         return await self.send(amount)
 
@@ -266,8 +281,10 @@ class TestmintWallet:
     ) -> int:
         """Credit balance to API key - test implementation"""
         try:
-            logger.info(f"TestmintWallet.credit_balance called with token: {cashu_token[:20]}...")
-            
+            logger.info(
+                f"TestmintWallet.credit_balance called with token: {cashu_token[:20]}..."
+            )
+
             # Redeem the token to get amount
             amount, _ = await self.redeem_token_simple(cashu_token)
             logger.info(f"TestmintWallet.credit_balance redeemed amount: {amount}")
@@ -278,7 +295,7 @@ class TestmintWallet:
 
             # Credit the balance using atomic database update to prevent race conditions
             from sqlmodel import col, update
-            
+
             # Use atomic update to avoid lost update problem in concurrent scenarios
             stmt = (
                 update(ApiKey)
@@ -287,17 +304,22 @@ class TestmintWallet:
             )
             await session.execute(stmt)
             await session.commit()
-            
+
             # Refresh the key object to get the updated balance
             await session.refresh(key)
-            
-            logger.info(f"TestmintWallet.credit_balance successfully credited {amount_msat} msat")
+
+            logger.info(
+                f"TestmintWallet.credit_balance successfully credited {amount_msat} msat"
+            )
 
             return amount_msat
         except Exception as e:
             logger.error(f"TestmintWallet.credit_balance failed: {e}")
             import traceback
-            logger.error(f"TestmintWallet.credit_balance full traceback: {traceback.format_exc()}")
+
+            logger.error(
+                f"TestmintWallet.credit_balance full traceback: {traceback.format_exc()}"
+            )
             raise ValueError(f"Failed to redeem token: {str(e)}")
 
 
@@ -483,10 +505,9 @@ async def integration_app(
             yield test_app
     else:
         # Use testmint with wallet patches for all integration tests
-        mint_url = test_env.get("CASHU_MINTS", "http://localhost:3338")
+        mint_url = os.environ.get("CASHU_MINTS", "http://localhost:3338")
         with (
             patch("router.core.db.engine", integration_engine),
-            patch.dict(os.environ, test_env, clear=False),
             patch("router.wallet.TRUSTED_MINTS", [mint_url]),
             patch("router.wallet.PRIMARY_MINT_URL", mint_url),
             patch("router.auth.credit_balance", testmint_wallet.credit_balance),
@@ -503,9 +524,9 @@ async def integration_app(
             # Configure the WebSocket mock for discovery service - fast failure for performance tests
             async def mock_websocket_connect(*args: Any, **kwargs: Any) -> None:
                 raise ConnectionError("Mock connection failed")
-            
+
             mock_websockets.side_effect = mock_websocket_connect
-            
+
             yield test_app
 
 
@@ -635,31 +656,6 @@ def mock_upstream_server() -> Any:
     mock_server.responses = responses
 
     return mock_server
-
-
-@pytest.fixture
-def integration_env_vars() -> Any:
-    """Fixture to manage integration test environment variables"""
-    original_env = os.environ.copy()
-
-    # Set integration test specific environment variables
-    test_env = {
-        "TESTMINT_URL": "https://testmint.routstr.com",
-        "INTEGRATION_TEST": "true",
-        "LOG_LEVEL": "DEBUG",
-        "DATABASE_POOL_SIZE": "10",
-        "DATABASE_MAX_OVERFLOW": "20",
-        "REQUEST_TIMEOUT": "30",
-        "UPSTREAM_TIMEOUT": "25",
-    }
-
-    os.environ.update(test_env)
-
-    yield test_env
-
-    # Restore original environment
-    os.environ.clear()
-    os.environ.update(original_env)
 
 
 @pytest_asyncio.fixture
