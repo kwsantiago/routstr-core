@@ -180,7 +180,10 @@ class TestInvalidInputHandling:
             assert response.status_code == 400, f"Token {repr(token)} should fail"
             # Accept various error messages that indicate token validation failure
             error_detail = response.json()["detail"].lower()
-            assert any(keyword in error_detail for keyword in ["invalid", "failed to redeem", "failed to decode"]), f"Unexpected error message: {error_detail}"
+            assert any(
+                keyword in error_detail
+                for keyword in ["invalid", "failed to redeem", "failed to decode"]
+            ), f"Unexpected error message: {error_detail}"
 
     @pytest.mark.asyncio
     async def test_invalid_json_payloads(
@@ -363,6 +366,7 @@ class TestResourceExhaustion:
         assert success_count == 50
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_memory_usage_under_load(
         self,
         authenticated_client: AsyncClient,
