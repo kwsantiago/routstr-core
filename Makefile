@@ -38,15 +38,10 @@ help:
 	@echo "  make check-deps         - Check system dependencies"
 	@echo "  make setup              - First-time project setup"
 	@echo ""
-	@echo "Database migration targets:"
+	@echo "Database migration shortcuts:"
+	@echo "  make create-migration   - Auto-generate new migration"
 	@echo "  make db-upgrade         - Apply all pending migrations"
 	@echo "  make db-downgrade       - Downgrade one migration"
-	@echo "  make db-current         - Show current migration revision"
-	@echo "  make db-history         - Show migration history"
-	@echo "  make db-migrate         - Auto-generate new migration"
-	@echo "  make db-revision        - Create empty migration file"
-	@echo "  make db-heads           - Show current migration heads"
-	@echo "  make db-clean           - Clean migration cache files"
 
 # First-time setup
 setup: check-deps dev-setup
