@@ -10,7 +10,7 @@ from httpx import AsyncClient, ConnectError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from router.core.db import ApiKey
+from routstr.core.db import ApiKey
 
 
 class TestNetworkFailureScenarios:
@@ -26,11 +26,11 @@ class TestNetworkFailureScenarios:
         # Patch the wallet send function to simulate failure across all modules
         with (
             patch(
-                "router.wallet.send_token",
+                "routstr.wallet.send_token",
                 AsyncMock(side_effect=ConnectError("Mint service unavailable")),
             ),
             patch(
-                "router.balance.send_token",
+                "routstr.balance.send_token",
                 AsyncMock(side_effect=ConnectError("Mint service unavailable")),
             ),
         ):
@@ -46,8 +46,8 @@ class TestNetworkFailureScenarios:
         integration_session: AsyncSession,
     ) -> None:
         """Test proxy behavior when upstream LLM service is down"""
-        # Mock at the router level to simulate upstream being down
-        with patch("router.proxy.httpx.AsyncClient") as mock_client_class:
+        # Mock at the routstr level to simulate upstream being down
+        with patch("routstr.proxy.httpx.AsyncClient") as mock_client_class:
             # Create a mock client instance
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
