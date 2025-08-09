@@ -1,6 +1,6 @@
 import asyncio
-import importlib.util
 import pathlib
+import sys
 from logging.config import fileConfig
 
 from alembic import context
@@ -9,18 +9,10 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 
-db_path = pathlib.Path(__file__).resolve().parents[1] / "router" / "core" / "db.py"
-spec = importlib.util.spec_from_file_location("core.db", db_path)
-if spec is None:
-    raise ImportError(f"Could not load spec from {db_path}")
-db = importlib.util.module_from_spec(spec)
-if db is None:
-    raise ImportError(f"Could not load module from {db_path}")
-if spec.loader is None:
-    raise ImportError(f"Spec loader is None for {db_path}")
-spec.loader.exec_module(db)
+# Add the parent directory to the Python path so we can import router modules
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-DATABASE_URL = getattr(db, "DATABASE_URL", "sqlite+aiosqlite:///keys.db")
+from router.core.db import DATABASE_URL
 
 config = context.config
 if config.config_file_name is None:
@@ -64,4 +56,15 @@ async def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    asyncio.run(run_migrations_online())
+    # Check if we're already in an event loop (e.g., being called from FastAPI)
+    try:
+        loop = asyncio.get_running_loop()
+        # If we're in an existing loop, create a new thread to run migrations
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(asyncio.run, run_migrations_online())
+            future.result()
+    except RuntimeError:
+        # No event loop running, we can use asyncio.run directly
+        asyncio.run(run_migrations_online())

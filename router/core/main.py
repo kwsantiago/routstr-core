@@ -12,7 +12,7 @@ from ..payment.models import MODELS, models_router, update_sats_pricing
 from ..proxy import proxy_router
 from ..wallet import periodic_payout
 from .admin import admin_router
-from .db import init_db
+from .db import init_db, run_migrations
 from .logging import get_logger, setup_logging
 
 # Initialize logging first
@@ -30,6 +30,14 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     payout_task = None
 
     try:
+        # Run database migrations on startup
+        # This ensures the database schema is always up-to-date in production
+        # Migrations are idempotent - running them multiple times is safe
+        logger.info("Running database migrations")
+        run_migrations()
+
+        # Initialize database connection pools
+        # This creates any tables that might not be tracked by migrations yet
         await init_db()
 
         pricing_task = asyncio.create_task(update_sats_pricing())
