@@ -96,6 +96,7 @@ async def test_root_endpoint_structure_and_performance(
 @pytest.mark.asyncio
 async def test_root_endpoint_environment_variables(
     integration_client: AsyncClient,
+    test_mode: str,
 ) -> None:
     """Test that root endpoint reflects environment variable configuration"""
 
@@ -105,8 +106,11 @@ async def test_root_endpoint_environment_variables(
     data = response.json()
 
     # Check that environment variables are reflected in response
-    # These are set in conftest.py for test environment
-    assert "http://localhost:3338" in data["mints"]
+    # In mock mode, URLs are adjusted to localhost
+    if test_mode == "docker":
+        assert "http://mint:3338" in data["mints"]
+    else:
+        assert "http://localhost:3338" in data["mints"]
 
     # Name should have a default value or be configurable
     assert len(data["name"]) > 0
