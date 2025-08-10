@@ -25,13 +25,13 @@ async def query_nostr_relay_for_providers(
 ) -> list[dict[str, Any]]:
     """
     Query a Nostr relay for provider announcements.
-    Searches for both RIP-02 (kind:31338) and NIP-91 (kind:38421) events.
+    Searches for NIP-91 (kind:38421) events.
     """
     events = []
 
-    # Build filter for both RIP-02 and NIP-91 events
+    # Build filter for NIP-91 events
     filter_obj: dict[str, Any] = {
-        "kinds": [31338, 38421],  # Both RIP-02 and NIP-91 Provider Announcements
+        "kinds": [38421],  # NIP-91 Provider Announcements
         "limit": limit,
     }
 
@@ -81,7 +81,7 @@ async def query_nostr_relay_for_providers(
 def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
     """
     Parse provider announcement events.
-    Handles both RIP-02 (kind:31338) and NIP-91 (kind:38421) formats.
+    Handles NIP-91 (kind:38421) format.
     Returns structured provider data or None if invalid.
     """
     try:
@@ -99,34 +99,8 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
         mint_url = None
         version = None
         
-        # Parse based on event kind
-        if kind == 31338:  # RIP-02 format
-            for tag in tags:
-                if len(tag) >= 2:
-                    if tag[0] == "endpoint":
-                        endpoint_urls.append(tag[1])
-                    elif tag[0] == "name":
-                        provider_name = tag[1]
-                    elif tag[0] == "d":
-                        d_tag = tag[1]
-                    elif tag[0] == "description":
-                        description = tag[1]
-                    elif tag[0] == "contact":
-                        contact = tag[1]
-                    elif tag[0] == "pricing":
-                        pricing_url = tag[1]
-                    elif tag[0] == "model":
-                        supported_models.append(tag[1])
-            
-            # RIP-02 requires single endpoint
-            endpoint_url = endpoint_urls[0] if endpoint_urls else None
-            
-            # Validate RIP-02 required fields
-            if not endpoint_url or not provider_name or not d_tag:
-                print(f"Invalid RIP-02 announcement - missing required tags: {event['id']}")
-                return None
-                
-        elif kind == 38421:  # NIP-91 format
+        # Parse NIP-91 format
+        if kind == 38421:  # NIP-91 format
             for tag in tags:
                 if len(tag) >= 2:
                     if tag[0] == "d":
@@ -248,13 +222,11 @@ async def get_providers(
     include_json: bool = False, pubkey: str | None = None
 ) -> dict[str, list[dict[str, Any]]]:
     """
-    Discover Routstr providers using both RIP-02 and NIP-91 specifications.
+    Discover Routstr providers using NIP-91 specification.
     Searches for provider announcement events on Nostr relays:
-    - kind:31338 (RIP-02)
     - kind:38421 (NIP-91)
 
     References:
-    - RIP-02: https://github.com/Routstr/protocol/blob/main/RIP-02.md
     - NIP-91: https://github.com/nostr-protocol/nips/pull/1987
     """
     # Default relays for provider discovery
@@ -291,7 +263,7 @@ async def get_providers(
 
     print(f"Found {len(all_events)} total unique provider announcements")
 
-    # Parse provider announcements according to RIP-02
+    # Parse provider announcements according to NIP-91
     providers = []
     for event in all_events:
         parsed_provider = parse_provider_announcement(event)

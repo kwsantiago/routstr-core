@@ -27,25 +27,23 @@ async def test_providers_endpoint_default_response(
         {
             "id": "event1",
             "pubkey": "test_pubkey1",
-            "kind": 31338,  # RIP-02 event kind
+            "kind": 38421,  # NIP-91 event kind
             "created_at": 1234567890,
-            "content": "",
+            "content": '{"name": "Provider 1", "about": "Test provider 1"}',
             "tags": [
                 ["d", "provider1"],
-                ["endpoint", "http://provider1.onion"],
-                ["name", "Provider 1"],
+                ["u", "http://provider1.onion"],
             ]
         },
         {
             "id": "event2",
             "pubkey": "test_pubkey2",
-            "kind": 31338,  # RIP-02 event kind
+            "kind": 38421,  # NIP-91 event kind
             "created_at": 1234567891,
-            "content": "",
+            "content": '{"name": "Provider 2", "about": "Test provider 2"}',
             "tags": [
                 ["d", "provider2"],
-                ["endpoint", "http://provider2.onion"],
-                ["name", "Provider 2"],
+                ["u", "http://provider2.onion"],
             ]
         },
     ]
@@ -102,13 +100,12 @@ async def test_providers_endpoint_with_include_json(
         {
             "id": "event1",
             "pubkey": "test_pubkey",
-            "kind": 31338,  # RIP-02 event kind
+            "kind": 38421,  # NIP-91 event kind
             "created_at": 1234567890,
-            "content": "",
+            "content": '{"name": "Test Provider", "about": "A test provider"}',
             "tags": [
                 ["d", "test-provider"],
-                ["endpoint", "http://test-provider.onion"],
-                ["name", "Test Provider"],
+                ["u", "http://test-provider.onion"],
             ]
         }
     ]
@@ -168,21 +165,18 @@ async def test_providers_data_structure_validation(
 ) -> None:
     """Test provider data structure contains expected fields"""
 
-    # Mock RIP-02 provider announcement event
+    # Mock NIP-91 provider announcement event
     mock_events: list[dict[str, Any]] = [
         {
             "id": "event1",
             "pubkey": "test_pubkey",
             "created_at": 1234567890,
-            "kind": 31338,  # RIP-02 event kind
-            "content": "Comprehensive provider announcement",
+            "kind": 38421,  # NIP-91 event kind
+            "content": '{"name": "Comprehensive Provider", "about": "A comprehensive AI provider"}',
             "tags": [
                 ["d", "provider-123"],
-                ["endpoint", "https://api.provider.example/v1"],
-                ["name", "Comprehensive Provider"],
-                ["description", "A comprehensive AI provider"],
-                ["model", "gpt-3.5-turbo"],
-                ["model", "gpt-4"],
+                ["u", "https://api.provider.example/v1"],
+                ["models", "gpt-3.5-turbo", "gpt-4"],
             ]
         }
     ]
@@ -218,7 +212,7 @@ async def test_providers_data_structure_validation(
                 assert "health" in provider_data
                 
                 provider_info = provider_data["provider"]
-                # Expected fields from RIP-02 parser
+                # Expected fields from NIP-91 parser
                 expected_fields = ["id", "name", "endpoint_url", "supported_models"]
                 for field in expected_fields:
                     assert field in provider_info
@@ -267,25 +261,23 @@ async def test_providers_endpoint_offline_providers(
         {
             "id": "event1",
             "pubkey": "healthy_provider_pubkey",
-            "kind": 31338,  # RIP-02 event kind
+            "kind": 38421,  # NIP-91 event kind
             "created_at": 1234567890,
-            "content": "Healthy provider announcement",
+            "content": '{"name": "Healthy Provider", "about": "Healthy provider announcement"}',
             "tags": [
                 ["d", "healthy-provider"],
-                ["endpoint", "http://healthy-provider.onion"],
-                ["name", "Healthy Provider"],
+                ["u", "http://healthy-provider.onion"],
             ]
         },
         {
             "id": "event2",
             "pubkey": "offline_provider_pubkey", 
-            "kind": 31338,  # RIP-02 event kind
+            "kind": 38421,  # NIP-91 event kind
             "created_at": 1234567891,
-            "content": "Offline provider announcement",
+            "content": '{"name": "Offline Provider", "about": "Offline provider announcement"}',
             "tags": [
                 ["d", "offline-provider"],
-                ["endpoint", "http://offline-provider.onion"],
-                ["name", "Offline Provider"],
+                ["u", "http://offline-provider.onion"],
             ]
         },
     ]
@@ -342,25 +334,23 @@ async def test_providers_endpoint_duplicate_urls(
         {
             "id": "event1",
             "pubkey": "provider_pubkey",
-            "kind": 31338,  # RIP-02 event kind
+            "kind": 38421,  # NIP-91 event kind
             "created_at": 1234567890,
-            "content": "Provider announcement",
+            "content": '{"name": "Provider", "about": "Provider announcement"}',
             "tags": [
                 ["d", "provider-1"],
-                ["endpoint", "http://provider.onion"],
-                ["name", "Provider"],
+                ["u", "http://provider.onion"],
             ]
         },
         {
             "id": "event2",
             "pubkey": "other_provider_pubkey",
-            "kind": 31338,  # RIP-02 event kind
+            "kind": 38421,  # NIP-91 event kind
             "created_at": 1234567892,
-            "content": "Different provider announcement",
+            "content": '{"name": "Other Provider", "about": "Different provider announcement"}',
             "tags": [
                 ["d", "other-provider"],
-                ["endpoint", "http://other-provider.onion"],
-                ["name", "Other Provider"],
+                ["u", "http://other-provider.onion"],
             ]
         },
     ]
