@@ -26,13 +26,27 @@ async def test_providers_endpoint_default_response(
     mock_events: list[dict[str, Any]] = [
         {
             "id": "event1",
-            "content": "Check out this provider: http://provider1.onion",
+            "pubkey": "test_pubkey1",
+            "kind": 31338,  # RIP-02 event kind
             "created_at": 1234567890,
+            "content": "",
+            "tags": [
+                ["d", "provider1"],
+                ["endpoint", "http://provider1.onion"],
+                ["name", "Provider 1"],
+            ]
         },
         {
             "id": "event2",
-            "content": "Another provider at http://provider2.onion is good",
+            "pubkey": "test_pubkey2",
+            "kind": 31338,  # RIP-02 event kind
             "created_at": 1234567891,
+            "content": "",
+            "tags": [
+                ["d", "provider2"],
+                ["endpoint", "http://provider2.onion"],
+                ["name", "Provider 2"],
+            ]
         },
     ]
 
@@ -60,10 +74,11 @@ async def test_providers_endpoint_default_response(
             assert "providers" in data
             assert isinstance(data["providers"], list)
 
-            # In default format, should return list of provider URLs (strings)
+            # In default format, should return list of provider objects
             for provider in data["providers"]:
-                assert isinstance(provider, str)
-                assert provider.endswith(".onion")
+                assert isinstance(provider, dict)
+                assert "endpoint_url" in provider
+                assert provider["endpoint_url"].endswith(".onion")
 
     # Verify no database state changes
     diff = await db_snapshot.diff()
@@ -86,8 +101,15 @@ async def test_providers_endpoint_with_include_json(
     mock_events: list[dict[str, Any]] = [
         {
             "id": "event1",
-            "content": "Provider info: http://test-provider.onion",
+            "pubkey": "test_pubkey",
+            "kind": 31338,  # RIP-02 event kind
             "created_at": 1234567890,
+            "content": "",
+            "tags": [
+                ["d", "test-provider"],
+                ["endpoint", "http://test-provider.onion"],
+                ["name", "Test Provider"],
+            ]
         }
     ]
 
@@ -117,15 +139,20 @@ async def test_providers_endpoint_with_include_json(
             assert "providers" in data
             assert isinstance(data["providers"], list)
 
-            # With include_json=true, should return list of dictionaries
-            for provider in data["providers"]:
-                assert isinstance(provider, dict)
-                # Each provider should be in format {url: json_data}
-                assert len(provider) == 1
-                url = list(provider.keys())[0]
-                json_data = provider[url]
-                assert url.endswith(".onion")
-                assert isinstance(json_data, dict)
+            # With include_json=true, should return list of dictionaries with provider and health info
+            for provider_data in data["providers"]:
+                assert isinstance(provider_data, dict)
+                # Each provider should have 'provider' and 'health' keys
+                assert "provider" in provider_data
+                assert "health" in provider_data
+                
+                provider_info = provider_data["provider"]
+                assert "endpoint_url" in provider_info
+                assert provider_info["endpoint_url"].endswith(".onion")
+                
+                health_info = provider_data["health"]
+                assert isinstance(health_info, dict)
+                assert "status_code" in health_info
 
     # Verify no database state changes
     diff = await db_snapshot.diff()
@@ -147,6 +174,7 @@ async def test_providers_data_structure_validation(
             "id": "event1",
             "pubkey": "test_pubkey",
             "created_at": 1234567890,
+            "kind": 31338,  # RIP-02 event kind
             "content": "Comprehensive provider announcement",
             "tags": [
                 ["d", "provider-123"],
@@ -239,6 +267,7 @@ async def test_providers_endpoint_offline_providers(
         {
             "id": "event1",
             "pubkey": "healthy_provider_pubkey",
+            "kind": 31338,  # RIP-02 event kind
             "created_at": 1234567890,
             "content": "Healthy provider announcement",
             "tags": [
@@ -250,6 +279,7 @@ async def test_providers_endpoint_offline_providers(
         {
             "id": "event2",
             "pubkey": "offline_provider_pubkey", 
+            "kind": 31338,  # RIP-02 event kind
             "created_at": 1234567891,
             "content": "Offline provider announcement",
             "tags": [
@@ -312,6 +342,7 @@ async def test_providers_endpoint_duplicate_urls(
         {
             "id": "event1",
             "pubkey": "provider_pubkey",
+            "kind": 31338,  # RIP-02 event kind
             "created_at": 1234567890,
             "content": "Provider announcement",
             "tags": [
@@ -323,6 +354,7 @@ async def test_providers_endpoint_duplicate_urls(
         {
             "id": "event2",
             "pubkey": "other_provider_pubkey",
+            "kind": 31338,  # RIP-02 event kind
             "created_at": 1234567892,
             "content": "Different provider announcement",
             "tags": [

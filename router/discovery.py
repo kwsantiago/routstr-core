@@ -149,7 +149,7 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
                     provider_name = metadata.get("name", "Unknown Provider")
                     description = metadata.get("about")
                     contact = metadata.get("contact")
-                except:
+                except (json.JSONDecodeError, TypeError):
                     provider_name = "Unknown Provider"
             else:
                 provider_name = "Unknown Provider"

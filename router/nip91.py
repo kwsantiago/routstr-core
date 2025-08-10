@@ -347,7 +347,7 @@ async def announce_provider() -> None:
             if tags_dict.get("d", [""])[0] == provider_id:
                 # Check if configuration has changed
                 existing_urls = [tag[1] for tag in event.get("tags", []) if tag[0] == "u"]
-                existing_models = next((tag[1:] for tag in event.get("tags", []) if tag[0] == "models"), [])
+                existing_models: list[str] = next((tag[1:] for tag in event.get("tags", []) if tag[0] == "models"), [])
                 
                 if set(existing_urls) == set(endpoint_urls) and set(existing_models) == set(supported_models):
                     logger.info("Existing NIP-91 announcement is up to date")
