@@ -33,7 +33,7 @@ sequenceDiagram
 - **API Key Management** – Hashed keys stored in SQLite with balance tracking and optional expiry/refund address
 - **Model-Based Pricing** – Convert USD prices in `models.json` to sats using live BTC/USD rates
 - **Admin Dashboard** – Simple HTML interface at `/admin/` to view balances and API keys
-- **Discovery** – Fetch available providers from Nostr relays using both RIP-02 and NIP-91 protocols
+- **Discovery** – Fetch available providers from Nostr relays using NIP-91 protocol
 - **NIP-91 Auto-Announcement** – Automatically announce this provider to Nostr relays when NSEC is provided
 - **Docker Support** – Provided `Dockerfile` and `compose.yml` for running with an optional Tor hidden service
 

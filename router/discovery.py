@@ -25,13 +25,13 @@ async def query_nostr_relay_for_providers(
 ) -> list[dict[str, Any]]:
     """
     Query a Nostr relay for provider announcements.
-    Searches for both RIP-02 and NIP-91 (kind:38421) events.
+    Searches for NIP-91 (kind:38421) events.
     """
     events = []
 
     # Build filter for NIP-91 events
     filter_obj: dict[str, Any] = {
-        "kinds": [38421],  # Both RIP-02 and NIP-91 Provider Announcements
+        "kinds": [38421],  # NIP-91 Provider Announcements
         "limit": limit,
     }
 
@@ -81,7 +81,7 @@ async def query_nostr_relay_for_providers(
 def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
     """
     Parse provider announcement events.
-    Handles both RIP-02 and NIP-91 (kind:38421) formats.
+    Handles NIP-91 (kind:38421) format.
     Returns structured provider data or None if invalid.
     """
     try:
@@ -100,7 +100,7 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
         version = None
         
         # Parse NIP-91 format
-        if kind == 38421:  # RIP-02/NIP-91 format
+        if kind == 38421:  # NIP-91 format
             for tag in tags:
                 if len(tag) >= 2:
                     if tag[0] == "d":
@@ -133,7 +133,7 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
             
             # Validate NIP-91 required fields
             if not endpoint_url or not d_tag:
-                print(f"Invalid RIP-02/NIP-91 announcement - missing required fields: {event['id']}")
+                print(f"Invalid NIP-91 announcement - missing required fields: {event['id']}")
                 return None
         else:
             print(f"Unknown event kind: {kind}")
@@ -222,12 +222,11 @@ async def get_providers(
     include_json: bool = False, pubkey: str | None = None
 ) -> dict[str, list[dict[str, Any]]]:
     """
-    Discover Routstr providers using both RIP-02 and NIP-91 specifications.
+    Discover Routstr providers using NIP-91 specification.
     Searches for provider announcement events on Nostr relays:
-    - kind:38421 (RIP-02/NIP-91)
+    - kind:38421 (NIP-91)
 
     References:
-    - RIP-02: https://github.com/Routstr/protocol/blob/main/RIP-02.md
     - NIP-91: https://github.com/nostr-protocol/nips/pull/1987
     """
     # Default relays for provider discovery
@@ -264,7 +263,7 @@ async def get_providers(
 
     print(f"Found {len(all_events)} total unique provider announcements")
 
-    # Parse provider announcements according to RIP-02/NIP-91
+    # Parse provider announcements according to NIP-91
     providers = []
     for event in all_events:
         parsed_provider = parse_provider_announcement(event)
