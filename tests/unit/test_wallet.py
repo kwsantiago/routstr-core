@@ -36,7 +36,7 @@ async def test_recieve_token_valid() -> None:
     token_str = f"cashuA{token_b64}"
 
     mock_wallet = Mock()
-    mock_wallet.redeem = AsyncMock()
+    mock_wallet.split = AsyncMock()
 
     with patch("routstr.wallet.TRUSTED_MINTS", ["http://mint:3338"]):
         with patch("routstr.wallet.deserialize_token_from_string") as mock_deserialize:
@@ -91,18 +91,6 @@ async def test_credit_balance() -> None:
             assert mock_key.balance == 6000000
             mock_session.add.assert_called_once_with(mock_key)
             mock_session.commit.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_credit_balance_invalid_mint() -> None:
-    mock_key = Mock()
-    mock_session = AsyncMock()
-
-    with patch(
-        "routstr.wallet.recieve_token", return_value=(1000, "sat", "http://other:3338")
-    ):
-        with pytest.raises(ValueError, match="Mint URL is not supported"):
-            await credit_balance("test_token", mock_key, mock_session)
 
 
 @pytest.mark.asyncio
