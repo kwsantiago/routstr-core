@@ -89,7 +89,7 @@ def get_package_version() -> str:
                 return version
             current_path = current_path.parent
 
-        # Fallback: try the simple path resolution (3 levels up for router/logging/logging_config.py)
+        # Fallback: try the simple path resolution (3 levels up for routstr/logging/logging_config.py)
         pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
         if pyproject_path.exists():
             with open(pyproject_path, "rb") as f:
@@ -229,27 +229,22 @@ def setup_logging() -> None:
             },
         },
         "loggers": {
-            "router": {
+            "routstr": {
+                "level": log_level,
+                "handlers": handlers,
+                "propagate": True,
+            },
+            "routstr.payment": {
                 "level": log_level,
                 "handlers": handlers,
                 "propagate": False,
             },
-            "router.payment": {
+            "routstr.proxy": {
                 "level": log_level,
                 "handlers": handlers,
                 "propagate": False,
             },
-            "router.cashu": {
-                "level": log_level,
-                "handlers": handlers,
-                "propagate": False,
-            },
-            "router.proxy": {
-                "level": log_level,
-                "handlers": handlers,
-                "propagate": False,
-            },
-            "router.auth": {
+            "routstr.auth": {
                 "level": log_level,
                 "handlers": handlers,
                 "propagate": False,
