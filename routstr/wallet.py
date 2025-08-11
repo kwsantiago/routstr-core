@@ -15,6 +15,7 @@ class CurrencyUnit(Enum):
     sat = "sat"
     msat = "msat"
 
+
 CASHU_MINTS = os.environ.get("CASHU_MINTS", "https://mint.minibits.cash/Bitcoin")
 TRUSTED_MINTS = CASHU_MINTS.split(",")
 PRIMARY_MINT_URL = TRUSTED_MINTS[0]
@@ -49,7 +50,8 @@ async def recieve_token(
     if token_obj.mint not in TRUSTED_MINTS:
         return await swap_to_primary_mint(token_obj, wallet)
 
-    await wallet.redeem(token_obj.proofs)
+    wallet.verify_proofs_dleq(token_obj.proofs)
+    await wallet.split(proofs=token_obj.proofs, amount=0, include_fees=True)
     return token_obj.amount, token_obj.unit, token_obj.mint
 
 
@@ -140,13 +142,6 @@ async def credit_balance(
                 "credit_balance: Converted to msat", extra={"amount_msat": amount}
             )
 
-        if mint_url != PRIMARY_MINT_URL:
-            logger.error(
-                "credit_balance: Mint URL mismatch",
-                extra={"mint_url": mint_url, "primary_mint": PRIMARY_MINT_URL},
-            )
-            raise ValueError("Mint URL is not supported by this proxy")
-
         logger.info(
             "credit_balance: Updating balance",
             extra={"old_balance": key.balance, "credit_amount": amount},
@@ -180,26 +175,26 @@ async def send_to_lnurl(amount: int, unit: CurrencyUnit, lnurl: str) -> dict[str
             PRIMARY_MINT_URL, db=".wallet", load_all_keysets=True, unit=unit
         )
         await payment_wallet.load_mint()
-        
+
         # Convert amount to correct unit
         if unit == CurrencyUnit.sat and amount < 1000:
-            # Convert sats to msats for small amounts  
+            # Convert sats to msats for small amounts
             amount_to_send = amount * 1000
             send_unit = CurrencyUnit.msat
         else:
             amount_to_send = amount
             send_unit = unit if isinstance(unit, CurrencyUnit) else CurrencyUnit(unit)
-            
+
         # For now, return a mock successful response since LNURL payment is complex
         logger.info(f"Mock payment: {amount_to_send} {send_unit} to {lnurl}")
-        
+
         return {
             "amount_sent": amount_to_send,
             "unit": send_unit.name,
             "lnurl": lnurl,
-            "status": "completed"
+            "status": "completed",
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to send to LNURL {lnurl}: {e}")
         unit_str = unit.value if isinstance(unit, CurrencyUnit) else unit
@@ -208,7 +203,7 @@ async def send_to_lnurl(amount: int, unit: CurrencyUnit, lnurl: str) -> dict[str
             "unit": unit_str,
             "lnurl": lnurl,
             "status": "failed",
-            "error": str(e)
+            "error": str(e),
         }
 
 
