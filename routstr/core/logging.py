@@ -50,7 +50,6 @@ class DailyRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
         self.baseFilename = new_filename
         self.current_date = new_date
 
-        print("self.backupCount", self.backupCount)
         # FIX ME: not sure if we need this
         # self._cleanup_old_files()
 
