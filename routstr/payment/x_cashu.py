@@ -63,7 +63,8 @@ async def x_cashu_handler(
                 "token_already_spent",
                 "The provided CASHU token has already been spent",
                 400,
-                x_cashu_token,
+                request=request,
+                token=x_cashu_token,
             )
 
         if "invalid token" in error_message.lower():
@@ -71,12 +72,17 @@ async def x_cashu_handler(
                 "invalid_token",
                 "The provided CASHU token is invalid",
                 400,
-                x_cashu_token,
+                request=request,
+                token=x_cashu_token,
             )
 
         if "mint error" in error_message.lower():
             return create_error_response(
-                "mint_error", f"CASHU mint error: {error_message}", 422, x_cashu_token
+                "mint_error",
+                f"CASHU mint error: {error_message}",
+                422,
+                request=request,
+                token=x_cashu_token,
             )
 
         # Generic error for other cases
@@ -84,7 +90,8 @@ async def x_cashu_handler(
             "cashu_error",
             f"CASHU token processing failed: {error_message}",
             400,
-            x_cashu_token,
+            request=request,
+            token=x_cashu_token,
         )
 
 
@@ -217,7 +224,10 @@ async def forward_to_upstream(
                 },
             )
             return create_error_response(
-                "internal_error", "An unexpected server error occurred", 500
+                "internal_error",
+                "An unexpected server error occurred",
+                500,
+                request=request,
             )
 
 
