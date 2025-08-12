@@ -416,7 +416,9 @@ async def forward_to_upstream(
         else:
             error_message = f"Error connecting to upstream service: {error_type}"
 
-        return create_error_response("upstream_error", error_message, 502)
+        return create_error_response(
+            "upstream_error", error_message, 502, request=request
+        )
 
     except Exception as exc:
         await client.aclose()
@@ -437,7 +439,10 @@ async def forward_to_upstream(
         )
 
         return create_error_response(
-            "internal_error", "An unexpected server error occurred", 500
+            "internal_error",
+            "An unexpected server error occurred",
+            500,
+            request=request,
         )
 
 
@@ -446,6 +451,14 @@ async def proxy(
     request: Request, path: str, session: AsyncSession = Depends(get_session)
 ) -> Response | StreamingResponse:
     """Main proxy endpoint handler."""
+    request_body = await request.body()
+    headers = dict(request.headers)
+
+    if "x-cashu" not in headers and "authorization" not in headers.keys():
+        return create_error_response(
+            "unauthorized", "Unauthorized", 401, request=request
+        )
+
     logger.info(
         "Received proxy request",
         extra={
@@ -455,9 +468,6 @@ async def proxy(
             "user_agent": request.headers.get("user-agent", "unknown")[:100],
         },
     )
-
-    request_body = await request.body()
-    headers = dict(request.headers)
 
     # Parse JSON body if present, handle empty/invalid JSON
     request_body_dict = {}
@@ -729,5 +739,8 @@ async def forward_get_to_upstream(
                 },
             )
             return create_error_response(
-                "internal_error", "An unexpected server error occurred", 500
+                "internal_error",
+                "An unexpected server error occurred",
+                500,
+                request=request,
             )
