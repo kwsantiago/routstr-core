@@ -35,9 +35,13 @@ class ApiKey(SQLModel, table=True):  # type: ignore
         default=0, description="Total spent in millisatoshis (msats)"
     )
     total_requests: int = Field(default=0)
-    mint_url: str | None = Field(
+    refund_mint_url: str | None = Field(
         default=None,
         description="URL of the mint used to create the cashu-token",
+    )
+    refund_currency: str | None = Field(
+        default=None,
+        description="Currency of the cashu-token",
     )
 
 
