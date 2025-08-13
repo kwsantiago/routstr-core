@@ -82,16 +82,21 @@ async def refund_wallet_endpoint(
             )
             result = {"recipient": key.refund_address, "msats": remaining_balance_msats}
         else:
-            # Convert msats to sats for cashu wallet
-            remaining_balance_sats = remaining_balance_msats // 1000
-            if remaining_balance_sats == 0:
+            if remaining_balance_msats <= 0:
                 raise HTTPException(
                     status_code=400,
                     detail="Balance too small to refund (less than 1 sat)",
                 )
 
-            # TODO: choose currency and mint based on what user has configured
-            token = await send_token(remaining_balance_sats, "sat")
+            refund_amount = (
+                remaining_balance_msats // 1000
+                if key.refund_currency == "sat"
+                else remaining_balance_msats
+            )
+            refund_currency = key.refund_currency or "sat"
+            token = await send_token(
+                refund_amount, refund_currency, key.refund_mint_url
+            )
 
             result = {
                 "msats": remaining_balance_msats,
