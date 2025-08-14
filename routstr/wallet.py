@@ -136,7 +136,7 @@ async def credit_balance(
             extra={"amount": amount, "unit": unit, "mint_url": mint_url},
         )
 
-        if unit == "sat":
+        if unit == "sat" or unit == CurrencyUnit.sat:
             amount = amount * 1000
             logger.info(
                 "credit_balance: Converted to msat", extra={"amount_msat": amount}
