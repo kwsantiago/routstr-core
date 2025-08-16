@@ -58,7 +58,9 @@ async def send(amount: int, unit: str, mint_url: str | None = None) -> tuple[int
     )
     await wallet.load_mint()
     await wallet.load_proofs()
-    proofs = wallet._get_proofs_per_keyset(wallet.proofs)[wallet.keyset_id]
+    proofs = await get_proofs_per_mint_and_unit(
+        wallet, mint_url or PRIMARY_MINT_URL, unit
+    )
 
     send_proofs, _ = await wallet.select_to_send(
         proofs, amount, set_reserved=True, include_fees=False
