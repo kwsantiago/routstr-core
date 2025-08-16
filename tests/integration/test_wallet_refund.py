@@ -7,7 +7,7 @@ import asyncio
 import base64
 import json
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient
@@ -486,10 +486,10 @@ async def test_refund_with_expired_key(
     """Test refunding an expired API key"""
 
     # Create expired key
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     token = await testmint_wallet.mint_tokens(500)
-    past_expiry = int((datetime.utcnow() - timedelta(hours=1)).timestamp())
+    past_expiry = int((datetime.now(timezone.utc) - timedelta(hours=1)).timestamp())
 
     # Use cashu token as Bearer auth to create API key
     integration_client.headers["Authorization"] = f"Bearer {token}"
@@ -512,10 +512,8 @@ async def test_refund_with_expired_key(
     integration_client.headers["Authorization"] = f"Bearer {api_key}"
 
     # Mock the refund to LN address
-    with patch("routstr.wallet.send_token") as mock_wallet_func:
-        mock_wallet = AsyncMock()
-        mock_wallet.send_to_lnurl = AsyncMock(return_value=500)  # type: ignore[method-assign]
-        mock_wallet_func.return_value = mock_wallet
+    with patch("routstr.balance.send_to_lnurl") as mock_send_to_lnurl:
+        mock_send_to_lnurl.return_value = 500
 
         response = await integration_client.post("/v1/wallet/refund")
 
