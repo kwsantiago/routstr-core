@@ -8,7 +8,14 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlmodel import select
 
-from ..wallet import get_balance, send_token
+from ..wallet import (
+    TRUSTED_MINTS,
+    fetch_all_balances,
+    get_proofs_per_mint_and_unit,
+    get_wallet,
+    send_token,
+    slow_filter_spend_proofs,
+)
 from .db import ApiKey, create_session
 from .logging import get_logger
 
@@ -19,6 +26,8 @@ admin_router = APIRouter(prefix="/admin", include_in_schema=False)
 
 class WithdrawRequest(BaseModel):
     amount: int
+    mint_url: str | None = None
+    unit: str = "sat"
 
 
 def login_form() -> str:
@@ -105,12 +114,13 @@ async def dashboard(request: Request) -> str:
             f"<tr><td>{key.hashed_key}</td><td>{key.balance}</td><td>{key.total_spent}</td><td>{key.total_requests}</td><td>{key.refund_address}</td><td>{'{} ({} UTC)'.format(key.key_expiry_time, expiry_time_human_readable) if key.key_expiry_time else key.key_expiry_time}</td></tr>"
         )
 
-    # Calculate the total balance of all API keys using integer arithmetic to
-    # avoid rounding issues.
-    total_user_balance = sum(key.balance for key in api_keys) // 1000
-    # Fetch balance from cashu
-    current_balance = await get_balance("sat")
-    owner_balance = current_balance - total_user_balance
+    # Fetch all balances using the abstracted function
+    (
+        balance_details,
+        total_wallet_balance_sats,
+        total_user_balance_sats,
+        owner_balance,
+    ) = await fetch_all_balances()
 
     return f"""<!DOCTYPE html>
     <html>
@@ -137,6 +147,14 @@ async def dashboard(request: Request) -> str:
                 .balance-label {{ color: #718096; }}
                 .balance-value {{ font-size: 1.5rem; font-weight: 700; color: #2d3748; }}
                 .balance-primary {{ color: #48bb78; }}
+                .currency-grid {{ margin-top: 1rem; font-size: 0.9rem; }}
+                .currency-row {{ display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid #f0f0f0; align-items: center; }}
+                .currency-row:last-child {{ border-bottom: none; }}
+                .currency-header {{ font-weight: 600; color: #4a5568; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }}
+                .mint-name {{ color: #2d3748; font-size: 0.85rem; word-break: break-all; }}
+                .balance-num {{ text-align: right; font-family: monospace; }}
+                .owner-positive {{ color: #22c55e; }}
+                .error-row {{ color: #dc2626; font-style: italic; }}
                 #token-result {{ margin-top: 20px; padding: 20px; background: #e6fffa; border: 1px solid #38b2ac; border-radius: 8px; display: none; }}
                 #token-text {{ font-family: 'Monaco', monospace; font-size: 13px; background: #2d3748; color: #68d391; padding: 15px; border-radius: 6px; margin: 10px 0; word-break: break-all; }}
                 .copy-btn {{ background: #38a169; padding: 6px 12px; font-size: 14px; }}
@@ -146,15 +164,16 @@ async def dashboard(request: Request) -> str:
                 @keyframes slideIn {{ from {{ transform: translateY(-20px); opacity: 0; }} to {{ transform: translateY(0); opacity: 1; }} }}
                 .close {{ color: #a0aec0; float: right; font-size: 28px; font-weight: bold; cursor: pointer; margin: -10px -10px 0 0; }}
                 .close:hover {{ color: #2d3748; }}
-                input[type="number"], input[type="text"] {{ width: 100%; padding: 10px; margin: 10px 0; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 16px; transition: border 0.2s; }}
-                input[type="number"]:focus, input[type="text"]:focus {{ outline: none; border-color: #4299e1; }}
+                input[type="number"], input[type="text"], select {{ width: 100%; padding: 10px; margin: 10px 0; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 16px; transition: border 0.2s; }}
+                input[type="number"]:focus, input[type="text"]:focus, select:focus {{ outline: none; border-color: #4299e1; }}
                 .warning {{ color: #e53e3e; font-weight: 600; margin: 10px 0; padding: 10px; background: #fff5f5; border-radius: 6px; }}
             </style>
             <script>
+                const balanceDetails = {json.dumps(balance_details)};
+                
                 function openWithdrawModal() {{
                     const modal = document.getElementById('withdraw-modal');
-                    const amountInput = document.getElementById('withdraw-amount');
-                    amountInput.value = {owner_balance};
+                    updateWithdrawForm();
                     modal.style.display = 'block';
                 }}
 
@@ -163,29 +182,69 @@ async def dashboard(request: Request) -> str:
                     modal.style.display = 'none';
                 }}
 
-                function checkAmount() {{
-                    const amount = parseInt(document.getElementById('withdraw-amount').value);
-                    const warning = document.getElementById('withdraw-warning');
-                    const ownerBalance = {owner_balance};
+                function updateWithdrawForm() {{
+                    const select = document.getElementById('mint-unit-select');
+                    const selectedValue = select.value;
+                    if (!selectedValue) return;
                     
-                    if (amount > ownerBalance && amount <= {current_balance}) {{
-                        warning.style.display = 'block';
-                    }} else {{
-                        warning.style.display = 'none';
+                    const [mint, unit] = selectedValue.split('|');
+                    const detail = balanceDetails.find(d => d.mint_url === mint && d.unit === unit);
+                    
+                    if (detail) {{
+                        const amountInput = document.getElementById('withdraw-amount');
+                        const maxSpan = document.getElementById('max-amount');
+                        const recommendedSpan = document.getElementById('recommended-amount');
+                        
+                        amountInput.max = detail.wallet_balance;
+                        amountInput.value = detail.owner_balance > 0 ? detail.owner_balance : 0;
+                        maxSpan.textContent = `${{detail.wallet_balance}} ${{unit}}`;
+                        recommendedSpan.textContent = `${{detail.owner_balance}} ${{unit}}`;
+                        
+                        checkAmount();
+                    }}
+                }}
+
+                function checkAmount() {{
+                    const select = document.getElementById('mint-unit-select');
+                    const selectedValue = select.value;
+                    if (!selectedValue) return;
+                    
+                    const [mint, unit] = selectedValue.split('|');
+                    const detail = balanceDetails.find(d => d.mint_url === mint && d.unit === unit);
+                    
+                    if (detail) {{
+                        const amount = parseInt(document.getElementById('withdraw-amount').value) || 0;
+                        const warning = document.getElementById('withdraw-warning');
+                        
+                        if (amount > detail.owner_balance && amount <= detail.wallet_balance) {{
+                            warning.style.display = 'block';
+                        }} else {{
+                            warning.style.display = 'none';
+                        }}
                     }}
                 }}
 
                 async function performWithdraw() {{
                     const amount = parseInt(document.getElementById('withdraw-amount').value);
+                    const select = document.getElementById('mint-unit-select');
+                    const selectedValue = select.value;
                     const button = document.getElementById('confirm-withdraw-btn');
                     const tokenResult = document.getElementById('token-result');
+                    
+                    if (!selectedValue) {{
+                        alert('Please select a mint and unit');
+                        return;
+                    }}
+                    
+                    const [mint, unit] = selectedValue.split('|');
+                    const detail = balanceDetails.find(d => d.mint_url === mint && d.unit === unit);
                     
                     if (!amount || amount <= 0) {{
                         alert('Please enter a valid amount');
                         return;
                     }}
                     
-                    if (amount > {current_balance}) {{
+                    if (amount > detail.wallet_balance) {{
                         alert('Amount exceeds wallet balance');
                         return;
                     }}
@@ -200,7 +259,11 @@ async def dashboard(request: Request) -> str:
                                 'Content-Type': 'application/json',
                             }},
                             credentials: 'same-origin',
-                            body: JSON.stringify({{ amount: amount }})
+                            body: JSON.stringify({{ 
+                                amount: amount,
+                                mint_url: mint,
+                                unit: unit
+                            }})
                         }});
                         
                         if (response.ok) {{
@@ -274,21 +337,48 @@ async def dashboard(request: Request) -> str:
             <div class="balance-card">
                 <h2>Cashu Wallet Balance</h2>
                 <div class="balance-item">
-                    <span class="balance-label">Your Balance</span>
-                    <span class="balance-value balance-primary">{owner_balance} sats</span>
+                    <span class="balance-label">Your Balance (Total)</span>
+                    <span class="balance-value balance-primary">{
+        owner_balance
+    } sats</span>
                 </div>
                 <div class="balance-item">
                     <span class="balance-label">Total Wallet</span>
-                    <span class="balance-value">{current_balance} sats</span>
+                    <span class="balance-value">{total_wallet_balance_sats} sats</span>
                 </div>
                 <div class="balance-item">
                     <span class="balance-label">User Balance</span>
-                    <span class="balance-value">{total_user_balance} sats</span>
+                    <span class="balance-value">{total_user_balance_sats} sats</span>
                 </div>
                 <p style="margin-top: 1rem; font-size: 0.9rem; color: #718096;">Your balance = Total wallet - User balance</p>
+                
+                <div class="currency-grid">
+                    <div class="currency-row currency-header">
+                        <div>Mint / Unit</div>
+                        <div class="balance-num">Wallet</div>
+                        <div class="balance-num">Users</div>
+                        <div class="balance-num">Owner</div>
+                    </div>
+                    {
+        "".join(
+            [
+                f'''<div class="currency-row {"error-row" if detail.get("error") else ""}">
+                    <div class="mint-name">{detail["mint_url"].replace("https://", "").replace("http://", "")} • {detail["unit"].upper()}</div>
+                    <div class="balance-num">{detail["wallet_balance"] if not detail.get("error") else "error"}</div>
+                    <div class="balance-num">{detail["user_balance"] if not detail.get("error") else "-"}</div>
+                    <div class="balance-num {"owner-positive" if detail["owner_balance"] > 0 else ""}">{detail["owner_balance"] if not detail.get("error") else "-"}</div>
+                </div>'''
+                for detail in balance_details
+                if detail.get("wallet_balance", 0) > 0 or detail.get("error")
+            ]
+        )
+    }
+                </div>
             </div>
             
-            <button id="withdraw-btn" onclick="openWithdrawModal()" {"disabled" if current_balance <= 0 else ""}>
+            <button id="withdraw-btn" onclick="openWithdrawModal()" {
+        "disabled" if total_wallet_balance_sats <= 0 else ""
+    }>
                 💸 Withdraw Balance
             </button>
             <button class="refresh-btn" onclick="refreshPage()">
@@ -302,10 +392,22 @@ async def dashboard(request: Request) -> str:
                 <div class="modal-content">
                     <span class="close" onclick="closeWithdrawModal()">&times;</span>
                     <h3>Withdraw Balance</h3>
-                    <p>Enter amount to withdraw (sats):</p>
-                    <input type="number" id="withdraw-amount" min="1" max="{current_balance}" placeholder="Amount in sats" oninput="checkAmount()">
-                    <p>Maximum: {current_balance} sats</p>
-                    <p>Your recommended balance: {owner_balance} sats</p>
+                    <p>Select mint and currency:</p>
+                    <select id="mint-unit-select" onchange="updateWithdrawForm()">
+                        {
+        "".join(
+            [
+                f'<option value="{detail["mint_url"]}|{detail["unit"]}">{detail["mint_url"].replace("https://", "").replace("http://", "")} • {detail["unit"].upper()} ({detail["owner_balance"]})</option>'
+                for detail in balance_details
+                if not detail.get("error") and detail["owner_balance"] > 0
+            ]
+        )
+    }
+                    </select>
+                    <p>Enter amount to withdraw:</p>
+                    <input type="number" id="withdraw-amount" min="1" placeholder="Amount" oninput="checkAmount()">
+                    <p>Maximum: <span id="max-amount">-</span></p>
+                    <p>Your recommended balance: <span id="recommended-amount">-</span></p>
                     <div id="withdraw-warning" class="warning" style="display: none;">
                         ⚠️ Warning: Withdrawing more than your balance will use user funds!
                     </div>
@@ -561,7 +663,18 @@ async def withdraw(
     if not admin_cookie or admin_cookie != os.getenv("ADMIN_PASSWORD"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    current_balance = await get_balance("sat")
+    # Get wallet and check balance
+    wallet = await get_wallet(
+        withdraw_request.mint_url or TRUSTED_MINTS[0], withdraw_request.unit
+    )
+    proofs = await get_proofs_per_mint_and_unit(
+        wallet,
+        withdraw_request.mint_url or TRUSTED_MINTS[0],
+        withdraw_request.unit,
+        not_reserved=True,
+    )
+    proofs = await slow_filter_spend_proofs(proofs, wallet)
+    current_balance = sum(proof.amount for proof in proofs)
 
     if withdraw_request.amount <= 0:
         raise HTTPException(
@@ -571,5 +684,7 @@ async def withdraw(
     if withdraw_request.amount > current_balance:
         raise HTTPException(status_code=400, detail="Insufficient wallet balance")
 
-    token = await send_token(withdraw_request.amount, "sat")
+    token = await send_token(
+        withdraw_request.amount, withdraw_request.unit, withdraw_request.mint_url
+    )
     return {"token": token}

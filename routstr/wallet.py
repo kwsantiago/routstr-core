@@ -1,5 +1,6 @@
 import asyncio
 import os
+from typing import TypedDict
 
 from cashu.core.base import Proof, Token
 from cashu.wallet.helpers import deserialize_token_from_string
@@ -197,6 +198,105 @@ async def slow_filter_spend_proofs(proofs: list[Proof], wallet: Wallet) -> list[
             _spent_proofs.append(proof)
     await wallet.set_reserved_for_send(_spent_proofs, reserved=True)
     return _proofs
+
+
+class BalanceDetail(TypedDict, total=False):
+    mint_url: str
+    unit: str
+    wallet_balance: int
+    user_balance: int
+    owner_balance: int
+    error: str
+
+
+async def fetch_all_balances(
+    units: list[str] | None = None,
+) -> tuple[list[BalanceDetail], int, int, int]:
+    """
+    Fetch balances for all trusted mints and units concurrently.
+
+    Returns:
+        - List of balance details for each mint/unit combination
+        - Total wallet balance in sats
+        - Total user balance in sats
+        - Owner balance in sats (wallet - user)
+    """
+    if units is None:
+        units = ["sat", "msat"]
+
+    async def fetch_balance(
+        session: db.AsyncSession, mint_url: str, unit: str
+    ) -> BalanceDetail:
+        try:
+            wallet = await get_wallet(mint_url, unit)
+            proofs = await get_proofs_per_mint_and_unit(
+                wallet, mint_url, unit, not_reserved=True
+            )
+            proofs = await slow_filter_spend_proofs(proofs, wallet)
+            user_balance = await db.balances_for_mint_and_unit(session, mint_url, unit)
+            proofs_balance = sum(proof.amount for proof in proofs)
+
+            result: BalanceDetail = {
+                "mint_url": mint_url,
+                "unit": unit,
+                "wallet_balance": proofs_balance,
+                "user_balance": user_balance,
+                "owner_balance": proofs_balance - user_balance,
+            }
+            return result
+        except Exception as e:
+            logger.error(f"Error getting balance for {mint_url} {unit}: {e}")
+            error_result: BalanceDetail = {
+                "mint_url": mint_url,
+                "unit": unit,
+                "wallet_balance": 0,
+                "user_balance": 0,
+                "owner_balance": 0,
+                "error": str(e),
+            }
+            return error_result
+
+    # Create tasks for all mint/unit combinations
+    async with db.create_session() as session:
+        tasks = [
+            fetch_balance(session, mint_url, unit)
+            for mint_url in TRUSTED_MINTS
+            for unit in units
+        ]
+
+        # Run all tasks concurrently
+        balance_details = list(await asyncio.gather(*tasks))
+
+    # Calculate totals
+    total_wallet_balance_sats = 0
+    total_user_balance_sats = 0
+
+    for detail in balance_details:
+        if not detail.get("error"):
+            # Convert to sats for total calculation
+            unit = detail["unit"]
+            proofs_balance_sats = (
+                detail["wallet_balance"]
+                if unit == "sat"
+                else detail["wallet_balance"] // 1000
+            )
+            user_balance_sats = (
+                detail["user_balance"]
+                if unit == "sat"
+                else detail["user_balance"] // 1000
+            )
+
+            total_wallet_balance_sats += proofs_balance_sats
+            total_user_balance_sats += user_balance_sats
+
+    owner_balance = total_wallet_balance_sats - total_user_balance_sats
+
+    return (
+        balance_details,
+        total_wallet_balance_sats,
+        total_user_balance_sats,
+        owner_balance,
+    )
 
 
 async def periodic_payout() -> None:
