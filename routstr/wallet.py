@@ -234,6 +234,8 @@ async def fetch_all_balances(
             )
             proofs = await slow_filter_spend_proofs(proofs, wallet)
             user_balance = await db.balances_for_mint_and_unit(session, mint_url, unit)
+            if unit == "sat":
+                user_balance = user_balance // 1000
             proofs_balance = sum(proof.amount for proof in proofs)
 
             result: BalanceDetail = {
@@ -317,12 +319,14 @@ async def periodic_payout() -> None:
                         user_balance = await db.balances_for_mint_and_unit(
                             session, mint_url, unit
                         )
+                        if unit == "sat":
+                            user_balance = user_balance // 1000
                         proofs_balance = sum(proof.amount for proof in proofs)
                         available_balance = proofs_balance - user_balance
                         print(f"Balance: {proofs_balance} {unit}")
                         print(f"User balance: {user_balance} {unit}")
                         print(f"Available balance: {available_balance} {unit}")
-                        min_amount = 5 if unit == "sat" else 5000
+                        min_amount = 210 if unit == "sat" else 210000
                         if proofs_balance > min_amount:
                             amount_received = await raw_send_to_lnurl(
                                 wallet, proofs, RECEIVE_LN_ADDRESS, unit
