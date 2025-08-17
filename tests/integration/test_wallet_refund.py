@@ -41,13 +41,17 @@ async def test_full_balance_refund_returns_cashu_token(
     assert response.status_code == 200
     data = response.json()
 
-    # Should return msats, recipient (None), and token
-    assert "msats" in data
-    assert "recipient" in data
+    # Should return either sats or msats (as string), and token
     assert "token" in data
-    assert data["msats"] == initial_balance
-    assert data["recipient"] is None
     assert data["token"].startswith("cashuA")
+    
+    # Check for either sats or msats depending on refund_currency
+    if "sats" in data:
+        assert data["sats"] == str(initial_balance // 1000)  # Convert msats to sats
+    elif "msats" in data:
+        assert data["msats"] == str(initial_balance)
+    else:
+        pytest.fail("Response should contain either 'sats' or 'msats'")
 
     # Validate token format
     token = data["token"]
@@ -88,7 +92,14 @@ async def test_partial_refund_not_supported(
     # Should still refund full balance (endpoint ignores the parameter)
     assert response.status_code == 200
     data = response.json()
-    assert data["msats"] == 10_000_000  # Full balance
+    
+    # Check for either sats or msats
+    if "sats" in data:
+        assert data["sats"] == "10000"  # Full balance in sats
+    elif "msats" in data:
+        assert data["msats"] == "10000000"  # Full balance in msats
+    else:
+        pytest.fail("Response should contain either 'sats' or 'msats'")
 
 
 @pytest.mark.integration
@@ -432,12 +443,16 @@ async def test_refund_response_format(
 
     data = response.json()
     assert isinstance(data, dict)
-    assert "msats" in data
-    assert "recipient" in data
     assert "token" in data
-    assert isinstance(data["msats"], int)
-    assert data["recipient"] is None
     assert isinstance(data["token"], str)
+    
+    # Should have either sats or msats (both as strings)
+    if "sats" in data:
+        assert isinstance(data["sats"], str)
+    elif "msats" in data:
+        assert isinstance(data["msats"], str)
+    else:
+        pytest.fail("Response should contain either 'sats' or 'msats'")
 
     # Test 2: Test with refund address would require creating key via proxy endpoint
     # Since refund address headers only work on proxy endpoints, not wallet endpoints
