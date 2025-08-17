@@ -105,7 +105,7 @@ async def test_full_wallet_flow(
     assert refund_response.status_code == 200
     refund_data = refund_response.json()
     assert "token" in refund_data
-    
+
     # Check for either sats or msats depending on refund_currency
     total_amount = initial_amount + topup_amount
     if "sats" in refund_data:

@@ -44,7 +44,7 @@ async def test_full_balance_refund_returns_cashu_token(
     # Should return either sats or msats (as string), and token
     assert "token" in data
     assert data["token"].startswith("cashuA")
-    
+
     # Check for either sats or msats depending on refund_currency
     if "sats" in data:
         assert data["sats"] == str(initial_balance // 1000)  # Convert msats to sats
@@ -92,7 +92,7 @@ async def test_partial_refund_not_supported(
     # Should still refund full balance (endpoint ignores the parameter)
     assert response.status_code == 200
     data = response.json()
-    
+
     # Check for either sats or msats
     if "sats" in data:
         assert data["sats"] == "10000"  # Full balance in sats
@@ -445,7 +445,7 @@ async def test_refund_response_format(
     assert isinstance(data, dict)
     assert "token" in data
     assert isinstance(data["token"], str)
-    
+
     # Should have either sats or msats (both as strings)
     if "sats" in data:
         assert isinstance(data["sats"], str)
