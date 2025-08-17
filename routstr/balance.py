@@ -85,7 +85,7 @@ async def refund_wallet_endpoint(
                 key.refund_mint_url or PRIMARY_MINT_URL,
                 key.refund_address,
             )
-            result = {"recipient": key.refund_address, "msats": remaining_balance_msats}
+            result = {"recipient": key.refund_address}
         else:
             refund_amount = (
                 remaining_balance_msats // 1000
@@ -96,12 +96,13 @@ async def refund_wallet_endpoint(
             token = await send_token(
                 refund_amount, refund_currency, key.refund_mint_url
             )
+            result = {"token": token}
 
-            result = {
-                "msats": remaining_balance_msats,
-                "recipient": None,
-                "token": token,
-            }
+        if key.refund_currency == "sat":
+            result["sats"] = str(remaining_balance_msats // 1000)
+        else:
+            result["msats"] = str(remaining_balance_msats)
+
     except HTTPException:
         # Re-raise HTTP exceptions (like 400 for balance too small)
         raise
