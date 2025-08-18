@@ -11,7 +11,7 @@ from .logging import get_logger
 logger = get_logger(__name__)
 
 # Context variable to store request ID across async context
-request_id_context: ContextVar[str | None] = ContextVar("request_id", default=None)
+request_id_context: ContextVar[str | None] = ContextVar("request_id")
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
@@ -62,8 +62,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         )
 
         # Log at TRACE level for full body (security filter will redact sensitive data)
-        if request_body and hasattr(logger, "trace"):
-            logger.trace(
+        if request_body and hasattr(logger, "exception"):
+            logger.exception(
                 "Request body",
                 extra={
                     "request_id": request_id,
@@ -95,7 +95,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 },
             )
             if hasattr(response, "headers"):
-                response.headers["X-Routstr-Request-Id"] = request_id
+                response.headers["x-routstr-request-id"] = request_id
 
             return response
 
