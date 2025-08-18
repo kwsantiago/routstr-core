@@ -124,7 +124,7 @@ class RequestIdFilter(logging.Filter):
             # Import here to avoid circular imports
             from .middleware import request_id_context
 
-            request_id = request_id_context.get()
+            request_id = request_id_context.get(None)
             record.request_id = request_id if request_id else "no-request-id"
         except ImportError:
             # If middleware isn't available yet, just use default
