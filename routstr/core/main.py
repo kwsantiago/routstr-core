@@ -5,6 +5,8 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from starlette.exceptions import HTTPException
 
 from ..balance import balance_router, deprecated_wallet_router
 from ..discovery import providers_router
@@ -14,7 +16,9 @@ from ..proxy import proxy_router
 from ..wallet import periodic_payout
 from .admin import admin_router
 from .db import init_db, run_migrations
+from .exceptions import general_exception_handler, http_exception_handler
 from .logging import get_logger, setup_logging
+from .middleware import LoggingMiddleware
 
 # Initialize logging first
 setup_logging()
@@ -100,6 +104,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add logging middleware
+app.add_middleware(LoggingMiddleware)
+
+# Add exception handlers
+app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore
+app.add_exception_handler(Exception, general_exception_handler)
+
 
 @app.get("/", include_in_schema=False)
 @app.get("/v1/info")
@@ -114,6 +125,11 @@ async def info() -> dict:
         "onion_url": os.environ.get("ONION_URL", ""),
         "models": MODELS,
     }
+
+
+@app.get("/admin")
+async def admin_redirect() -> RedirectResponse:
+    return RedirectResponse("/admin/")
 
 
 app.include_router(models_router)
