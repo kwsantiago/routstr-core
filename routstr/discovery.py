@@ -49,7 +49,7 @@ async def query_nostr_relay_for_providers(
 
             while True:
                 try:
-                    message = await asyncio.wait_for(websocket.recv(), timeout=5)
+                    message = await asyncio.wait_for(websocket.recv(), timeout=50)
                     data = json.loads(message)
 
                     if data[0] == "EVENT" and data[1] == sub_id:
@@ -87,7 +87,7 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
     try:
         tags = event.get("tags", [])
         kind = event.get("kind")
-        
+
         # Common fields
         d_tag = None
         endpoint_urls = []
@@ -98,7 +98,7 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
         supported_models = []
         mint_url = None
         version = None
-        
+
         # Parse NIP-91 format
         if kind == 38421:  # NIP-91 format
             for tag in tags:
@@ -114,7 +114,7 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
                         mint_url = tag[1]
                     elif tag[0] == "version":
                         version = tag[1]
-            
+
             # Parse metadata from content for NIP-91
             content = event.get("content", "")
             if content:
@@ -127,13 +127,15 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
                     provider_name = "Unknown Provider"
             else:
                 provider_name = "Unknown Provider"
-            
+
             # Use first URL as primary endpoint
             endpoint_url = endpoint_urls[0] if endpoint_urls else None
-            
+
             # Validate NIP-91 required fields
             if not endpoint_url or not d_tag:
-                print(f"Invalid NIP-91 announcement - missing required fields: {event['id']}")
+                print(
+                    f"Invalid NIP-91 announcement - missing required fields: {event['id']}"
+                )
                 return None
         else:
             print(f"Unknown event kind: {kind}")
@@ -230,11 +232,12 @@ async def get_providers(
     - NIP-91: https://github.com/nostr-protocol/nips/pull/1987
     """
     # Default relays for provider discovery
-    discovery_relays = [
-        "wss://relay.nostr.band",
-        "wss://relay.damus.io",
-        "wss://relay.routstr.com",
-    ]
+    # discovery_relays = [
+    #     "wss://relay.nostr.band",
+    #     "wss://relay.damus.io",
+    #     "wss://relay.routstr.com",
+    # ]
+    discovery_relays = os.getenv("RELAYS", "").split(",")
 
     all_events = []
     event_ids = set()  # To avoid duplicates
