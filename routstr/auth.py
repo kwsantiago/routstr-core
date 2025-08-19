@@ -1,4 +1,5 @@
 import hashlib
+import math
 from typing import Optional
 
 from fastapi import HTTPException
@@ -323,10 +324,9 @@ async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> int
     stmt = (
         update(ApiKey)
         .where(col(ApiKey.hashed_key) == key.hashed_key)
-        .where(col(ApiKey.balance) >= cost_per_request)
+        .where(col(ApiKey.total_balance) >= cost_per_request)
         .values(
-            balance=col(ApiKey.balance) - cost_per_request,
-            total_spent=col(ApiKey.total_spent) + cost_per_request,
+            reserved_balance=col(ApiKey.reserved_balance) + cost_per_request,
             total_requests=col(ApiKey.total_requests) + 1,
         )
     )
@@ -438,6 +438,7 @@ async def adjust_payment_for_tokens(
             # If token-based pricing is enabled and base cost is 0, use token-based cost
             # Otherwise, token cost is additional to the base cost
             cost_difference = cost.total_msats - deducted_max_cost
+            total_cost_msats: int = math.ceil(cost.total_msats)
 
             logger.info(
                 "Calculated token-based cost",
@@ -460,6 +461,7 @@ async def adjust_payment_for_tokens(
                 await session.commit()
                 return cost.dict()
 
+            # this should never happen why do we handle this???
             if cost_difference > 0:
                 # Need to charge more
                 logger.info(
@@ -473,6 +475,7 @@ async def adjust_payment_for_tokens(
                     },
                 )
 
+                # this should never happen why do we handle this???
                 if key.balance < cost_difference:
                     logger.warning(
                         "Insufficient balance for token-based pricing adjustment",
@@ -486,6 +489,7 @@ async def adjust_payment_for_tokens(
                     )
                     await session.commit()
                 else:
+                    # this should never happen why do we handle this???
                     charge_stmt = (
                         update(ApiKey)
                         .where(col(ApiKey.hashed_key) == key.hashed_key)
@@ -538,13 +542,15 @@ async def adjust_payment_for_tokens(
                     update(ApiKey)
                     .where(col(ApiKey.hashed_key) == key.hashed_key)
                     .values(
-                        balance=col(ApiKey.balance) + refund,
-                        total_spent=col(ApiKey.total_spent) - refund,
+                        reserved_balance=col(ApiKey.reserved_balance)
+                        - deducted_max_cost,
+                        total_balance=col(ApiKey.total_balance) - total_cost_msats,
+                        total_spent=col(ApiKey.total_spent) + total_cost_msats,
                     )
                 )
                 await session.exec(refund_stmt)  # type: ignore[call-overload]
                 await session.commit()
-                cost.total_msats = deducted_max_cost - refund
+                cost.total_msats = total_cost_msats
                 await session.refresh(key)
 
                 logger.info(
