@@ -1,5 +1,6 @@
 import asyncio
 import os
+from functools import lru_cache
 from typing import TypedDict
 
 from cashu.core.base import Proof, Token
@@ -162,6 +163,7 @@ async def credit_balance(
         raise
 
 
+@lru_cache(maxsize=10)
 async def get_wallet(mint_url: str, unit: str = "sat") -> Wallet:
     wallet = await Wallet.with_db(
         mint_url, db=".wallet", load_all_keysets=True, unit=unit
@@ -188,14 +190,16 @@ async def get_proofs_per_mint_and_unit(
 async def slow_filter_spend_proofs(proofs: list[Proof], wallet: Wallet) -> list[Proof]:
     if not proofs:
         return []
-    proof_states = await wallet.check_proof_state(proofs)
     _proofs = []
     _spent_proofs = []
-    for proof, state in zip(proofs, proof_states.states):
-        if str(state.state) != "spent":
-            _proofs.append(proof)
-        else:
-            _spent_proofs.append(proof)
+    for i in range(0, len(proofs), 1000):
+        pb = proofs[i : i + 1000]
+        proof_states = await wallet.check_proof_state(pb)
+        for proof, state in zip(proofs, proof_states.states):
+            if str(state.state) != "spent":
+                _proofs.append(proof)
+            else:
+                _spent_proofs.append(proof)
     await wallet.set_reserved_for_send(_spent_proofs, reserved=True)
     return _proofs
 
