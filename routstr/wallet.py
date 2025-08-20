@@ -195,7 +195,7 @@ async def slow_filter_spend_proofs(proofs: list[Proof], wallet: Wallet) -> list[
     for i in range(0, len(proofs), 1000):
         pb = proofs[i : i + 1000]
         proof_states = await wallet.check_proof_state(pb)
-        for proof, state in zip(proofs, proof_states.states):
+        for proof, state in zip(pb, proof_states.states):
             if str(state.state) != "spent":
                 _proofs.append(proof)
             else:
