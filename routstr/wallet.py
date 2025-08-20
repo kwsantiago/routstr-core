@@ -1,6 +1,5 @@
 import asyncio
 import os
-from functools import lru_cache
 from typing import TypedDict
 
 from cashu.core.base import Proof, Token
@@ -20,13 +19,7 @@ RECEIVE_LN_ADDRESS = os.environ.get("RECEIVE_LN_ADDRESS", "")
 
 
 async def get_balance(unit: str) -> int:
-    wallet = await Wallet.with_db(
-        PRIMARY_MINT_URL,
-        db=".wallet",
-        load_all_keysets=True,
-        unit=unit,
-    )
-    await wallet.load_proofs()
+    wallet = await get_wallet(PRIMARY_MINT_URL, unit)
     return wallet.available_balance.amount
 
 
@@ -37,12 +30,7 @@ async def recieve_token(
     if len(token_obj.keysets) > 1:
         raise ValueError("Multiple keysets per token currently not supported")
 
-    wallet = await Wallet.with_db(
-        token_obj.mint,
-        db=".wallet",
-        load_all_keysets=True,
-        unit=token_obj.unit,
-    )
+    wallet = await get_wallet(token_obj.mint, token_obj.unit)
     await wallet.load_mint(token_obj.keysets[0])
 
     if token_obj.mint not in TRUSTED_MINTS:
@@ -55,11 +43,7 @@ async def recieve_token(
 
 async def send(amount: int, unit: str, mint_url: str | None = None) -> tuple[int, str]:
     """Internal send function - returns amount and serialized token"""
-    wallet: Wallet = await Wallet.with_db(
-        mint_url or PRIMARY_MINT_URL, db=".wallet", load_all_keysets=True, unit=unit
-    )
-    await wallet.load_mint()
-    await wallet.load_proofs()
+    wallet: Wallet = await get_wallet(mint_url or PRIMARY_MINT_URL, unit)
     proofs = await get_proofs_per_mint_and_unit(
         wallet, mint_url or PRIMARY_MINT_URL, unit
     )
@@ -97,10 +81,7 @@ async def swap_to_primary_mint(
         raise ValueError("Invalid unit")
     estimated_fee_sat = int(max(amount_msat // 1000 * 0.01, 2))
     amount_msat_after_fee = amount_msat - estimated_fee_sat * 1000
-    primary_wallet = await Wallet.with_db(
-        PRIMARY_MINT_URL, db=".wallet", load_all_keysets=True, unit="sat"
-    )
-    await primary_wallet.load_mint()
+    primary_wallet = await get_wallet(PRIMARY_MINT_URL, "sat")
 
     minted_amount = amount_msat_after_fee // 1000
     mint_quote = await primary_wallet.request_mint(minted_amount)
@@ -163,14 +144,20 @@ async def credit_balance(
         raise
 
 
-@lru_cache(maxsize=10)
+_wallets: dict[str, Wallet] = {}
+
+
 async def get_wallet(mint_url: str, unit: str = "sat") -> Wallet:
-    wallet = await Wallet.with_db(
-        mint_url, db=".wallet", load_all_keysets=True, unit=unit
-    )
-    await wallet.load_mint()
-    await wallet.load_proofs(reload=True)
-    return wallet
+    global _wallets
+    id = f"{mint_url}_{unit}"
+    if id not in _wallets:
+        _wallets[id] = await Wallet.with_db(
+            mint_url, db=".wallet", load_all_keysets=True, unit=unit
+        )
+
+    await _wallets[id].load_mint()
+    await _wallets[id].load_proofs(reload=True)
+    return _wallets[id]
 
 
 async def get_proofs_per_mint_and_unit(
@@ -310,7 +297,7 @@ async def periodic_payout() -> None:
         logger.error("RECEIVE_LN_ADDRESS is not set, skipping payout")
         return
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(6)
         try:
             async with db.create_session() as session:
                 for mint_url in TRUSTED_MINTS:
