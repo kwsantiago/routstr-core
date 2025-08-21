@@ -30,8 +30,8 @@ async def recieve_token(
     if len(token_obj.keysets) > 1:
         raise ValueError("Multiple keysets per token currently not supported")
 
-    wallet = await get_wallet(token_obj.mint, token_obj.unit)
-    await wallet.load_mint(token_obj.keysets[0])
+    wallet = await get_wallet(token_obj.mint, token_obj.unit, load=False)
+    wallet.keyset_id = token_obj.keysets[0]
 
     if token_obj.mint not in TRUSTED_MINTS:
         return await swap_to_primary_mint(token_obj, wallet)
@@ -147,7 +147,7 @@ async def credit_balance(
 _wallets: dict[str, Wallet] = {}
 
 
-async def get_wallet(mint_url: str, unit: str = "sat") -> Wallet:
+async def get_wallet(mint_url: str, unit: str = "sat", load: bool = True) -> Wallet:
     global _wallets
     id = f"{mint_url}_{unit}"
     if id not in _wallets:
@@ -155,8 +155,9 @@ async def get_wallet(mint_url: str, unit: str = "sat") -> Wallet:
             mint_url, db=".wallet", load_all_keysets=True, unit=unit
         )
 
-    await _wallets[id].load_mint()
-    await _wallets[id].load_proofs(reload=True)
+    if load:
+        await _wallets[id].load_mint()
+        await _wallets[id].load_proofs(reload=True)
     return _wallets[id]
 
 
@@ -297,7 +298,7 @@ async def periodic_payout() -> None:
         logger.error("RECEIVE_LN_ADDRESS is not set, skipping payout")
         return
     while True:
-        await asyncio.sleep(6)
+        await asyncio.sleep(60 * 5)
         try:
             async with db.create_session() as session:
                 for mint_url in TRUSTED_MINTS:
