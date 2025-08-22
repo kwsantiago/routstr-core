@@ -1,6 +1,6 @@
 import asyncio
-import os
 import math
+import os
 from typing import TypedDict
 
 from cashu.core.base import Proof, Token
