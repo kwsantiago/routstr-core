@@ -1,9 +1,9 @@
 """Test to verify reserved balance never goes negative."""
 
 import asyncio
+
 import pytest
 from httpx import AsyncClient
-from sqlmodel import select
 
 from routstr.core.db import ApiKey, create_session
 
@@ -27,7 +27,7 @@ async def test_reserved_balance_never_negative(test_client: AsyncClient) -> None
 
     # Test 1: Make a request that will fail upstream
     # This should reserve funds and then revert them
-    response = await test_client.post(
+    await test_client.post(
         "/v1/chat/completions",
         headers=headers,
         json={
@@ -96,7 +96,7 @@ async def test_reserved_balance_with_successful_requests(
 
     # Make a valid request (assuming you have a mock or test endpoint)
     # This test might need adjustment based on your test setup
-    response = await test_client.post(
+    await test_client.post(
         "/v1/chat/completions",
         headers=headers,
         json={
