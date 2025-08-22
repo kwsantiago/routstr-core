@@ -22,9 +22,7 @@ class ApiKey(SQLModel, table=True):  # type: ignore
     __tablename__ = "api_keys"
 
     hashed_key: str = Field(primary_key=True)
-    balance: int = Field(
-        default=0, description="Total balance in millisatoshis (msats)"
-    )
+    balance: int = Field(default=0, description="Balance in millisatoshis (msats)")
     reserved_balance: int = Field(
         default=0, description="Reserved balance in millisatoshis (msats)"
     )
