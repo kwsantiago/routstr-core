@@ -19,7 +19,7 @@ from .payment.helpers import (
     UPSTREAM_BASE_URL,
     check_token_balance,
     create_error_response,
-    get_cost_per_request,
+    get_max_cost_for_model,
     prepare_upstream_headers,
 )
 from .payment.x_cashu import x_cashu_handler
@@ -501,9 +501,8 @@ async def proxy(
                 media_type="application/json",
             )
 
-    max_cost_for_model = get_cost_per_request(
-        model=request_body_dict.get("model", None)
-    )
+    model = request_body_dict.get("model", "unknown")
+    max_cost_for_model = get_max_cost_for_model(model=model)
     check_token_balance(headers, request_body_dict, max_cost_for_model)
 
     # Handle authentication
@@ -515,7 +514,7 @@ async def proxy(
                 "token_preview": x_cashu[:20] + "..." if len(x_cashu) > 20 else x_cashu,
             },
         )
-        return await x_cashu_handler(request, x_cashu, path)
+        return await x_cashu_handler(request, x_cashu, path, max_cost_for_model)
 
     elif auth := headers.get("authorization", None):
         logger.debug(
@@ -557,7 +556,7 @@ async def proxy(
         )
 
         try:
-            await pay_for_request(key, session, request_body_dict)
+            await pay_for_request(key, max_cost_for_model, session)
             logger.info(
                 "Payment processed successfully",
                 extra={

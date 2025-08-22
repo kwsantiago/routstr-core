@@ -272,10 +272,10 @@ async def validate_bearer_key(
     )
 
 
-async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> int:
+async def pay_for_request(
+    key: ApiKey, cost_per_request: int, session: AsyncSession
+) -> int:
     """Process payment for a request."""
-    model = body["model"]
-    cost_per_request = get_max_cost_for_model(model=model)
 
     logger.info(
         "Processing payment for request",
@@ -283,7 +283,6 @@ async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> int
             "key_hash": key.hashed_key[:8] + "...",
             "current_balance": key.balance,
             "required_cost": cost_per_request,
-            "model": model,
             "sufficient_balance": key.balance >= cost_per_request,
         },
     )
@@ -297,7 +296,6 @@ async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> int
                 "reserved_balance": key.reserved_balance,
                 "required": cost_per_request,
                 "shortfall": cost_per_request - key.total_balance,
-                "model": model,
             },
         )
 
@@ -366,7 +364,6 @@ async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> int
             "new_balance": key.balance,
             "total_spent": key.total_spent,
             "total_requests": key.total_requests,
-            "model": model,
         },
     )
 
