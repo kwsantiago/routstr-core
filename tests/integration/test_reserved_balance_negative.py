@@ -5,6 +5,7 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from routstr.core.db import ApiKey, create_session
 
@@ -132,32 +133,31 @@ async def test_reserved_balance_with_successful_requests(
 
 
 @pytest.mark.asyncio
-async def test_insufficient_reserved_balance_for_revert() -> None:
+async def test_insufficient_reserved_balance_for_revert(integration_session: AsyncSession) -> None:
     """Test revert_pay_for_request behavior with insufficient reserved balance."""
     from routstr.auth import revert_pay_for_request
 
-    async with create_session() as session:
-        # Create key with zero reserved balance
-        unique_key = f"test_revert_key_{uuid.uuid4().hex[:8]}"
-        test_key = ApiKey(
-            hashed_key=unique_key,
-            balance=1000,
-            reserved_balance=0,
-        )
-        session.add(test_key)
-        await session.commit()
+    # Create key with zero reserved balance
+    unique_key = f"test_revert_key_{uuid.uuid4().hex[:8]}"
+    test_key = ApiKey(
+        hashed_key=unique_key,
+        balance=1000,
+        reserved_balance=0,
+    )
+    integration_session.add(test_key)
+    await integration_session.commit()
 
-        # Try to revert more than available
-        # Note: Current implementation allows reserved_balance to go negative
-        await revert_pay_for_request(test_key, session, 100)
+    # Try to revert more than available
+    # Note: Current implementation allows reserved_balance to go negative
+    await revert_pay_for_request(test_key, integration_session, 100)
 
-        # Refresh to get updated values
-        await session.refresh(test_key)
+    # Refresh to get updated values
+    await integration_session.refresh(test_key)
 
-        # Current implementation allows negative reserved balance
-        assert test_key.reserved_balance == -100, (
-            f"Expected reserved_balance to be -100, got: {test_key.reserved_balance}"
-        )
-        assert test_key.total_requests == -1, (
-            f"Expected total_requests to be -1, got: {test_key.total_requests}"
-        )
+    # Current implementation allows negative reserved balance
+    assert test_key.reserved_balance == -100, (
+        f"Expected reserved_balance to be -100, got: {test_key.reserved_balance}"
+    )
+    assert test_key.total_requests == -1, (
+        f"Expected total_requests to be -1, got: {test_key.total_requests}"
+    )

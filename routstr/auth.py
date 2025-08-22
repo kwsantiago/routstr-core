@@ -13,7 +13,6 @@ from .payment.cost_caculation import (
     MaxCostData,
     calculate_cost,
 )
-from .payment.helpers import get_max_cost_for_model
 from .wallet import (
     PRIMARY_MINT_URL,
     TRUSTED_MINTS,
