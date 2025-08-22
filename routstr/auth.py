@@ -388,6 +388,14 @@ async def revert_pay_for_request(
     result = await session.exec(stmt)  # type: ignore[call-overload]
     await session.commit()
     if result.rowcount == 0:
+        logger.error(
+            "Failed to revert payment - insufficient reserved balance",
+            extra={
+                "key_hash": key.hashed_key[:8] + "...",
+                "cost_to_revert": cost_per_request,
+                "current_reserved_balance": key.reserved_balance,
+            },
+        )
         raise HTTPException(
             status_code=402,
             detail={
@@ -548,8 +556,23 @@ async def adjust_payment_for_tokens(
                         total_spent=col(ApiKey.total_spent) + total_cost_msats,
                     )
                 )
-                await session.exec(refund_stmt)  # type: ignore[call-overload]
+                result = await session.exec(refund_stmt)  # type: ignore[call-overload]
                 await session.commit()
+
+                if result.rowcount == 0:
+                    logger.error(
+                        "Failed to finalize payment - insufficient reserved balance",
+                        extra={
+                            "key_hash": key.hashed_key[:8] + "...",
+                            "deducted_max_cost": deducted_max_cost,
+                            "current_reserved_balance": key.reserved_balance,
+                            "total_cost": total_cost_msats,
+                            "model": model,
+                        },
+                    )
+                    # Still return the cost data even if we couldn't properly finalize
+                    # The reservation was already made, so the user has paid
+
                 cost.total_msats = total_cost_msats
                 await session.refresh(key)
 
