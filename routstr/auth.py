@@ -305,7 +305,7 @@ async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> int
             status_code=402,
             detail={
                 "error": {
-                    "message": f"Insufficient balance: {cost_per_request} mSats required. {key.balance} available.",
+                    "message": f"Insufficient balance: {cost_per_request} mSats required. {key.total_balance} available. (reserved: {key.reserved_balance})",
                     "type": "insufficient_quota",
                     "code": "insufficient_balance",
                 }
