@@ -597,8 +597,12 @@ async def proxy(
                 "key_hash": key.hashed_key[:8] + "...",
                 "key_balance": key.balance,
                 "max_cost_for_model": max_cost_for_model,
-                "upstream_headers": response._headers,
-                "upstream_response": response.body,
+                "upstream_headers": response.headers
+                if hasattr(response, "headers")
+                else None,
+                "upstream_response": response.body
+                if hasattr(response, "body")
+                else None,
             },
         )
         request_id = (
