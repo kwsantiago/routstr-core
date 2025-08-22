@@ -288,14 +288,15 @@ async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> int
         },
     )
 
-    if key.balance < cost_per_request:
+    if key.total_balance < cost_per_request:
         logger.warning(
             "Insufficient balance for request",
             extra={
                 "key_hash": key.hashed_key[:8] + "...",
                 "balance": key.balance,
+                "reserved_balance": key.reserved_balance,
                 "required": cost_per_request,
-                "shortfall": cost_per_request - key.balance,
+                "shortfall": cost_per_request - key.total_balance,
                 "model": model,
             },
         )
@@ -379,8 +380,7 @@ async def revert_pay_for_request(
         update(ApiKey)
         .where(col(ApiKey.hashed_key) == key.hashed_key)
         .values(
-            balance=col(ApiKey.balance) + cost_per_request,
-            total_spent=col(ApiKey.total_spent) - cost_per_request,
+            reserved_balance=col(ApiKey.reserved_balance) - cost_per_request,
             total_requests=col(ApiKey.total_requests) - 1,
         )
     )
