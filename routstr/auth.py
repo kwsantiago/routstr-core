@@ -324,7 +324,7 @@ async def pay_for_request(key: ApiKey, session: AsyncSession, body: dict) -> int
     stmt = (
         update(ApiKey)
         .where(col(ApiKey.hashed_key) == key.hashed_key)
-        .where(col(ApiKey.total_balance) >= cost_per_request)
+        .where(col(ApiKey.balance) >= cost_per_request)
         .values(
             reserved_balance=col(ApiKey.reserved_balance) + cost_per_request,
             total_requests=col(ApiKey.total_requests) + 1,
@@ -544,7 +544,7 @@ async def adjust_payment_for_tokens(
                     .values(
                         reserved_balance=col(ApiKey.reserved_balance)
                         - deducted_max_cost,
-                        total_balance=col(ApiKey.total_balance) - total_cost_msats,
+                        balance=col(ApiKey.balance) - total_cost_msats,
                         total_spent=col(ApiKey.total_spent) + total_cost_msats,
                     )
                 )

@@ -22,7 +22,7 @@ class ApiKey(SQLModel, table=True):  # type: ignore
     __tablename__ = "api_keys"
 
     hashed_key: str = Field(primary_key=True)
-    total_balance: int = Field(
+    balance: int = Field(
         default=0, description="Total balance in millisatoshis (msats)"
     )
     reserved_balance: int = Field(
@@ -50,8 +50,8 @@ class ApiKey(SQLModel, table=True):  # type: ignore
     )
 
     @property
-    def balance(self) -> int:
-        return self.total_balance - self.reserved_balance
+    def total_balance(self) -> int:
+        return self.balance - self.reserved_balance
 
 
 async def balances_for_mint_and_unit(
