@@ -36,6 +36,7 @@ async def recieve_token(
     if len(token_obj.keysets) > 1:
         raise ValueError("Multiple keysets per token currently not supported")
 
+    # TODO check if can be initialized differently
     wallet = await Wallet.with_db(
         token_obj.mint,
         db=".wallet",
@@ -54,6 +55,7 @@ async def recieve_token(
 
 async def send(amount: int, unit: str, mint_url: str | None = None) -> tuple[int, str]:
     """Internal send function - returns amount and serialized token"""
+    # TODO check if can be initialized differently
     wallet: Wallet = await Wallet.with_db(
         mint_url or PRIMARY_MINT_URL, db=".wallet", load_all_keysets=True, unit=unit
     )
@@ -96,6 +98,7 @@ async def swap_to_primary_mint(
         raise ValueError("Invalid unit")
     estimated_fee_sat = int(max(amount_msat // 1000 * 0.01, 2))
     amount_msat_after_fee = amount_msat - estimated_fee_sat * 1000
+    # TODO check if can be initialized differently
     primary_wallet = await Wallet.with_db(
         PRIMARY_MINT_URL, db=".wallet", load_all_keysets=True, unit="sat"
     )
