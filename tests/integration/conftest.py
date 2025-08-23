@@ -8,8 +8,9 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from routstr.core.logging import get_logger
 
