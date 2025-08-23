@@ -9,10 +9,10 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 
+from routstr.core.db import DATABASE_URL
+
 # Add the parent directory to the Python path so we can import routstr modules
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-
-from routstr.core.db import DATABASE_URL
 
 config = context.config
 if config.config_file_name is None:

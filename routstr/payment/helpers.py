@@ -87,7 +87,7 @@ def check_token_balance(headers: dict, body: dict, max_cost_for_model: int) -> N
         )
 
 
-def get_max_cost_for_model(model: str) -> int:
+def get_max_cost_for_model(model: str, tolerance_percentage: int = 1) -> int:
     """Get the maximum cost for a specific model."""
     logger.debug(
         "Getting max cost for model",
@@ -118,7 +118,7 @@ def get_max_cost_for_model(model: str) -> int:
 
     for m in MODELS:
         if m.id == model:
-            max_cost = m.sats_pricing.max_cost * 1000  # type: ignore
+            max_cost = m.sats_pricing.max_cost * 1000 * (1 - tolerance_percentage / 100)  # type: ignore
             logger.debug(
                 "Found model-specific max cost",
                 extra={"model": model, "max_cost_msats": max_cost},

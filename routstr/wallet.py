@@ -76,11 +76,10 @@ async def swap_to_primary_mint(
     )
     # Ensure amount is an integer
     if not isinstance(token_obj.amount, int):
-        print(f"Token amount is not an integer: {token_obj.amount}")
         token_amount = int(token_obj.amount)
     else:
         token_amount = token_obj.amount
-    
+
     if token_obj.unit == "sat":
         amount_msat = token_amount * 1000
     elif token_obj.unit == "msat":
@@ -323,32 +322,21 @@ async def periodic_payout() -> None:
                             user_balance = user_balance // 1000
                         proofs_balance = sum(proof.amount for proof in proofs)
                         available_balance = proofs_balance - user_balance
-                        print(f"Balance: {proofs_balance} {unit}")
-                        print(f"User balance: {user_balance} {unit}")
-                        print(f"Available balance: {available_balance} {unit}")
                         min_amount = 210 if unit == "sat" else 210000
-                        if proofs_balance > min_amount:
+                        if available_balance > min_amount:
                             amount_received = await raw_send_to_lnurl(
                                 wallet, proofs, RECEIVE_LN_ADDRESS, unit
                             )
-                            print(f"Amount received: {amount_received}")
                             logger.info(
                                 "Payout sent successfully",
                                 extra={
                                     "mint_url": mint_url,
                                     "unit": unit,
-                                    "balance": proofs_balance,
+                                    "balance": available_balance,
+                                    "amount_received": amount_received,
                                 },
                             )
-                        else:
-                            logger.info(
-                                "Not enough balance to send payout",
-                                extra={
-                                    "mint_url": mint_url,
-                                    "unit": unit,
-                                    "balance": proofs_balance,
-                                },
-                            )
+
                         await asyncio.sleep(5)
         except Exception as e:
             logger.error(
