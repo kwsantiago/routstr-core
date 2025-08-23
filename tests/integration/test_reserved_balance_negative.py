@@ -133,7 +133,9 @@ async def test_reserved_balance_with_successful_requests(
 
 
 @pytest.mark.asyncio
-async def test_insufficient_reserved_balance_for_revert(integration_session: AsyncSession) -> None:
+async def test_insufficient_reserved_balance_for_revert(
+    integration_session: AsyncSession,
+) -> None:
     """Test revert_pay_for_request behavior with insufficient reserved balance."""
     from routstr.auth import revert_pay_for_request
 
