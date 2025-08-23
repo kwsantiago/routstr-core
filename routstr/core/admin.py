@@ -667,7 +667,7 @@ async def withdraw(
     wallet = await get_wallet(
         withdraw_request.mint_url or TRUSTED_MINTS[0], withdraw_request.unit
     )
-    proofs = await get_proofs_per_mint_and_unit(
+    proofs = get_proofs_per_mint_and_unit(
         wallet,
         withdraw_request.mint_url or TRUSTED_MINTS[0],
         withdraw_request.unit,

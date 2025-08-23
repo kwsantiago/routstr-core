@@ -45,9 +45,7 @@ async def recieve_token(
 async def send(amount: int, unit: str, mint_url: str | None = None) -> tuple[int, str]:
     """Internal send function - returns amount and serialized token"""
     wallet: Wallet = await get_wallet(mint_url or PRIMARY_MINT_URL, unit)
-    proofs = await get_proofs_per_mint_and_unit(
-        wallet, mint_url or PRIMARY_MINT_URL, unit
-    )
+    proofs = get_proofs_per_mint_and_unit(wallet, mint_url or PRIMARY_MINT_URL, unit)
 
     send_proofs, _ = await wallet.select_to_send(
         proofs, amount, set_reserved=True, include_fees=False
@@ -168,7 +166,7 @@ async def get_wallet(mint_url: str, unit: str = "sat", load: bool = True) -> Wal
     return _wallets[id]
 
 
-async def get_proofs_per_mint_and_unit(
+def get_proofs_per_mint_and_unit(
     wallet: Wallet, mint_url: str, unit: str, not_reserved: bool = False
 ) -> list[Proof]:
     valid_keyset_ids = [
@@ -228,7 +226,7 @@ async def fetch_all_balances(
     ) -> BalanceDetail:
         try:
             wallet = await get_wallet(mint_url, unit)
-            proofs = await get_proofs_per_mint_and_unit(
+            proofs = get_proofs_per_mint_and_unit(
                 wallet, mint_url, unit, not_reserved=True
             )
             proofs = await slow_filter_spend_proofs(proofs, wallet)
@@ -311,7 +309,7 @@ async def periodic_payout() -> None:
                 for mint_url in TRUSTED_MINTS:
                     for unit in ["sat", "msat"]:
                         wallet = await get_wallet(mint_url, unit)
-                        proofs = await get_proofs_per_mint_and_unit(
+                        proofs = get_proofs_per_mint_and_unit(
                             wallet, mint_url, unit, not_reserved=True
                         )
                         proofs = await slow_filter_spend_proofs(proofs, wallet)
