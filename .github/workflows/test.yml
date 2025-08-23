@@ -40,7 +40,7 @@ jobs:
           UPSTREAM_BASE_URL: "http://test"
           UPSTREAM_API_KEY: "test"
         run: |
-          uv run pytest --verbose --tb=short
+          uv run pytest -m "not requires_docker" --verbose --tb=short --junit-xml=pytest.xml --cov=routstr --cov-report=term --cov-report=xml
 
       - name: Upload test results
         if: always()
@@ -49,5 +49,6 @@ jobs:
           name: test-results-${{ matrix.python-version }}
           path: |
             pytest.xml
+            coverage.xml
             .coverage
           retention-days: 30
