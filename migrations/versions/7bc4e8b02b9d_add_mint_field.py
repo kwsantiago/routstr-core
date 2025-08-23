@@ -10,10 +10,10 @@ from alembic import op
 from sqlmodel.sql import sqltypes
 
 # revision identifiers, used by Alembic.
-revision = "7bc4e8b02b9d"
-down_revision = "f6ce1348e266"
-branch_labels = None
-depends_on = None
+revision: str = "7bc4e8b02b9d"
+down_revision: str | None = "f6ce1348e266"
+branch_labels: None = None
+depends_on: None = None
 
 
 def upgrade() -> None:

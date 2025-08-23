@@ -76,7 +76,6 @@ async def swap_to_primary_mint(
     )
     # Ensure amount is an integer
     if not isinstance(token_obj.amount, int):
-        print(f"Token amount is not an integer: {token_obj.amount}")
         token_amount = int(token_obj.amount)
     else:
         token_amount = token_obj.amount

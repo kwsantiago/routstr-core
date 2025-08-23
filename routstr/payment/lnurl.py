@@ -278,18 +278,13 @@ async def raw_send_to_lnurl(
     estimated_fees_msat = estimated_fees_sat * 1000
     final_amount = amount_msat - estimated_fees_msat
 
-    print(f"Final amount: {final_amount} {unit}")
-    print(f"Estimated fees: {estimated_fees_msat} msat")
-    print(f"Amount before fees: {amount_msat} {unit}")
     bolt11_invoice, _ = await get_lnurl_invoice(
         lnurl_data["callback_url"], final_amount
     )
-    print(f"Bolt11 invoice: {bolt11_invoice}")
 
     melt_quote_resp = await wallet.melt_quote(
         invoice=bolt11_invoice, amount_msat=final_amount
     )
-    print(melt_quote_resp)
     _ = await wallet.melt(
         proofs=proofs,
         invoice=bolt11_invoice,
