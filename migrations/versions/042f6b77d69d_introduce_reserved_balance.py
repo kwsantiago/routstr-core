@@ -9,10 +9,10 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "042f6b77d69d"
-down_revision: str | None = "898f00ea481e"
-branch_labels: None = None
-depends_on: None = None
+revision = "042f6b77d69d"
+down_revision = "898f00ea481e"
+branch_labels = None
+depends_on = None
 
 
 def upgrade() -> None:
