@@ -60,12 +60,7 @@ Create a `models.json` with your pricing:
         "completion": "0.002",
         "request": "0.00005"
       },
-      "minimum_charge": "0.0001",  // Minimum charge per request
-      "volume_discounts": {
-        "1000": 0.95,    // 5% off after 1K requests
-        "10000": 0.90,   // 10% off after 10K requests
-        "100000": 0.85   // 15% off after 100K requests
-      }
+      "minimum_charge": "0.0001"  // Minimum charge per request
     }
   ],
   "default_pricing": {
@@ -209,47 +204,6 @@ class TimeBased PricingStrategy:
         return int(base_cost * multiplier)
 ```
 
-### Volume Discounts
-
-Implement tiered pricing based on usage:
-
-```python
-class VolumeDiscountStrategy:
-    def __init__(self):
-        self.tiers = [
-            (0, 1.0),         # 0-999: Full price
-            (1000, 0.95),     # 1K-9.9K: 5% off
-            (10000, 0.90),    # 10K-99.9K: 10% off
-            (100000, 0.85),   # 100K+: 15% off
-        ]
-    
-    async def get_discount_rate(
-        self, 
-        api_key_id: int,
-        session: AsyncSession
-    ) -> float:
-        """Get discount rate based on usage volume."""
-        # Count requests in current month
-        start_of_month = datetime.now().replace(
-            day=1, hour=0, minute=0, second=0
-        )
-        
-        result = await session.execute(
-            select(func.count(Transaction.id))
-            .where(Transaction.api_key_id == api_key_id)
-            .where(Transaction.timestamp >= start_of_month)
-            .where(Transaction.type == TransactionType.USAGE)
-        )
-        request_count = result.scalar()
-        
-        # Find applicable tier
-        for threshold, rate in reversed(self.tiers):
-            if request_count >= threshold:
-                return rate
-        
-        return 1.0
-```
-
 ### Model-Specific Surcharges
 
 Add custom fees for specific models:
@@ -334,7 +288,6 @@ class CompositeCostCalculator(CostCalculator):
         self.strategies = [
             BaseCostCalculator(),
             TimeBasedPricingStrategy(),
-            VolumeDiscountStrategy(),
             ModelSurchargeStrategy(),
             GeographicPricingStrategy()
         ]
@@ -495,11 +448,6 @@ class PricingExperiment:
         "uptime": "99.9%",
         "support_response": "1 hour",
         "dedicated_capacity": true
-      },
-      "volume_discounts": {
-        "10000": 0.95,
-        "100000": 0.90,
-        "1000000": 0.85
       }
     }
   ],

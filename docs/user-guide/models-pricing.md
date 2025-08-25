@@ -9,12 +9,14 @@ Routstr supports three pricing models:
 ### 1. Fixed Pricing
 
 Simple per-request charging:
+
 ```bash
 MODEL_BASED_PRICING=false
 COST_PER_REQUEST=10  # 10 sats per request
 ```
 
 **Best for:**
+
 - Uniform API usage
 - Simple applications
 - Predictable costs
@@ -22,6 +24,7 @@ COST_PER_REQUEST=10  # 10 sats per request
 ### 2. Token-Based Pricing
 
 Charge based on actual token usage:
+
 ```bash
 MODEL_BASED_PRICING=false
 COST_PER_REQUEST=1              # 1 sat base fee
@@ -30,6 +33,7 @@ COST_PER_1K_OUTPUT_TOKENS=15    # 15 sats per 1K output
 ```
 
 **Best for:**
+
 - Varied request sizes
 - Fair usage billing
 - Cost optimization
@@ -37,6 +41,7 @@ COST_PER_1K_OUTPUT_TOKENS=15    # 15 sats per 1K output
 ### 3. Model-Based Pricing
 
 Dynamic pricing based on model costs:
+
 ```bash
 MODEL_BASED_PRICING=true
 EXCHANGE_FEE=1.005      # 0.5% exchange fee
@@ -44,6 +49,7 @@ UPSTREAM_PROVIDER_FEE=1.05  # 5% provider fee
 ```
 
 **Best for:**
+
 - Multiple models
 - Market-based pricing
 - Automatic updates
@@ -99,6 +105,7 @@ Create `models.json` to override defaults:
 ### Auto-updating Models
 
 Fetch latest models from OpenRouter:
+
 ```bash
 # Update models from API
 python scripts/models_meta.py
@@ -123,6 +130,7 @@ Final Cost = Sats Cost × Exchange Fee × Provider Fee
 ### Example Calculations
 
 **Example 1: Simple Chat (gpt-3.5-turbo)**
+
 ```
 Input: 50 tokens
 Output: 150 tokens
@@ -137,6 +145,7 @@ With 5.5% total fees: 0.79 sats
 ```
 
 **Example 2: Large Context (gpt-4)**
+
 ```
 Input: 2,000 tokens
 Output: 500 tokens
@@ -151,6 +160,7 @@ With 5.5% total fees: 190 sats
 ```
 
 **Example 3: Image Generation (dall-e-3)**
+
 ```
 Model: dall-e-3
 Size: 1024x1024
@@ -166,11 +176,13 @@ With 5.5% fees: 84 sats
 ### Exchange Fee
 
 Covers Bitcoin/USD conversion costs:
+
 ```bash
 EXCHANGE_FEE=1.005  # 0.5% default
 ```
 
 Factors:
+
 - Exchange rate volatility
 - Conversion costs
 - Price update frequency
@@ -178,11 +190,13 @@ Factors:
 ### Provider Fee
 
 Node operator's margin:
+
 ```bash
 UPSTREAM_PROVIDER_FEE=1.05  # 5% default
 ```
 
 Covers:
+
 - Infrastructure costs
 - Maintenance
 - Support
@@ -237,6 +251,7 @@ Lower costs for embeddings:
 ### Per-Request Tracking
 
 Each API response includes usage data:
+
 ```json
 {
   "usage": {
@@ -259,6 +274,7 @@ Each API response includes usage data:
 ### Daily Summaries
 
 View in admin dashboard:
+
 - Total requests
 - Token usage by model
 - Cost distribution
@@ -267,6 +283,7 @@ View in admin dashboard:
 ### Cost Alerts
 
 Set up notifications:
+
 ```python
 # Example monitoring script
 def check_daily_spend(api_key):
@@ -311,6 +328,7 @@ prompt = "Calculate: 2+2"
 ### Caching Strategies
 
 Implement smart caching:
+
 ```python
 # Cache embedding results
 @lru_cache(maxsize=1000)
@@ -330,6 +348,7 @@ COMMON_RESPONSES = {
 ### Batch Processing
 
 Process multiple items efficiently:
+
 ```python
 # Instead of multiple calls
 for item in items:
@@ -347,6 +366,7 @@ response = client.chat.completions.create(
 ### Time-Based Pricing
 
 Implement off-peak discounts:
+
 ```python
 def calculate_multiplier():
     hour = datetime.now().hour
@@ -357,21 +377,10 @@ def calculate_multiplier():
     return 1.0
 ```
 
-### Volume Discounts
-
-Reward high-volume usage:
-```python
-def get_discount_rate(monthly_volume_sats):
-    if monthly_volume_sats > 1_000_000:
-        return 0.9  # 10% discount
-    elif monthly_volume_sats > 500_000:
-        return 0.95  # 5% discount
-    return 1.0
-```
-
 ### Model-Specific Rules
 
 Custom pricing logic:
+
 ```python
 def adjust_model_price(model, base_price):
     # Premium for latest models
@@ -390,6 +399,7 @@ def adjust_model_price(model, base_price):
 ### Public Pricing Page
 
 Display current rates:
+
 ```html
 <!-- Available at /pricing -->
 <table>
@@ -405,6 +415,7 @@ Display current rates:
 ### Cost Estimation API
 
 Provide cost estimates:
+
 ```bash
 POST /v1/estimate
 {
@@ -429,11 +440,13 @@ Response:
 ### Pricing Mismatches
 
 **Issue**: Costs don't match expectations
+
 - Check current BTC/USD rate
 - Verify fee settings
 - Review model configuration
 
 **Issue**: Models not found
+
 - Update models.json
 - Check model ID spelling
 - Verify upstream support
@@ -441,6 +454,7 @@ Response:
 ### Fee Calculations
 
 **Issue**: Fees seem too high
+
 - Review EXCHANGE_FEE setting
 - Check UPSTREAM_PROVIDER_FEE
 - Calculate total multiplier

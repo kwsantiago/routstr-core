@@ -5,6 +5,7 @@ Routstr Core includes built-in support for Tor hidden services, enabling anonymo
 ## Overview
 
 Tor support provides:
+
 - **Anonymous Access**: Hidden service (.onion) address
 - **Enhanced Privacy**: No IP address logging
 - **Censorship Resistance**: Accessible from restricted networks
@@ -41,6 +42,7 @@ volumes:
 ```
 
 Start with:
+
 ```bash
 docker compose up -d
 ```
@@ -58,6 +60,7 @@ docker exec tor cat /var/lib/tor/hidden_service/hostname
 ```
 
 Your onion address will look like:
+
 ```
 roustrjfsdgfiueghsklchg.onion
 ```
@@ -91,11 +94,13 @@ HiddenServiceVersion 3
 ```
 
 Restart Tor:
+
 ```bash
 sudo systemctl restart tor
 ```
 
 Get onion address:
+
 ```bash
 sudo cat /var/lib/tor/routstr/hostname
 ```
@@ -189,6 +194,7 @@ ONION_URL=http://roustrjfsdgfiueghsklchg.onion
 ```
 
 This will be included in:
+
 - `/v1/info` endpoint
 - Nostr announcements
 - Admin dashboard
@@ -198,6 +204,7 @@ This will be included in:
 ### Hidden Service Security
 
 1. **Keep Private Key Secure**
+
    ```bash
    # Backup hidden service keys
    sudo tar -czf tor-keys-backup.tar.gz /var/lib/tor/routstr/
@@ -207,12 +214,14 @@ This will be included in:
    ```
 
 2. **Access Control**
+
    ```bash
    # Restrict to authenticated clients
    HiddenServiceAuthorizeClient stealth client1,client2
    ```
 
 3. **Rate Limiting**
+
    ```bash
    # In torrc
    HiddenServiceMaxStreams 100
@@ -222,6 +231,7 @@ This will be included in:
 ### Operational Security
 
 1. **Separate Tor Instance**
+
    ```yaml
    # Use dedicated Tor container
    tor:
@@ -232,6 +242,7 @@ This will be included in:
    ```
 
 2. **Monitor Tor Health**
+
    ```python
    async def check_tor_connection():
        """Verify Tor connectivity."""
@@ -249,6 +260,7 @@ This will be included in:
    ```
 
 3. **Logging Considerations**
+
    ```python
    # Don't log .onion addresses with IPs
    def sanitize_logs(message: str) -> str:
@@ -371,6 +383,7 @@ async def tor_health():
 ### Common Issues
 
 **Hidden Service Not Accessible**
+
 ```bash
 # Check Tor logs
 docker compose logs tor
@@ -385,12 +398,14 @@ curl --socks5 127.0.0.1:9050 http://your-onion.onion/v1/info
 ```
 
 **Slow Connection**
+
 - Tor adds 3+ hops of latency
 - Use connection pooling
 - Implement aggressive caching
 - Consider increasing timeouts
 
 **Connection Errors**
+
 ```python
 # Implement Tor-specific retry logic
 async def tor_retry(func, max_retries=5):

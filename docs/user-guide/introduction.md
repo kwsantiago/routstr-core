@@ -16,7 +16,7 @@ Before starting, you'll need:
 
 1. **A Running Routstr Instance**
    - Either your own deployment or access to a public node
-   - The base URL (e.g., `https://api.yournode.com`)
+   - The base URL (e.g., `https://api.routstr.com/v1`)
 
 2. **A Cashu Wallet** (optional but recommended)
    - [Nutstash](https://nutstash.app) - Web wallet
