@@ -1,12 +1,33 @@
 # API Endpoints
 
-Complete reference for all available endpoints in Routstr Core.
+Complete reference for all Routstr API endpoints.
 
-## Chat Completions
+## Overview
+
+Routstr provides OpenAI-compatible endpoints with Bitcoin/eCash payment integration.
+
+### Base URL
+
+All endpoints use the base URL:
+
+```text
+https://api.routstr.com/v1
+```
+
+### Authentication
+
+All endpoints require authentication via:
+
+- **Bearer Token**: `Authorization: Bearer rstr_your_api_key`
+- **X-Cashu Header**: `X-Cashu: cashuAeyJ0...` (for direct eCash payments)
+
+See [Authentication](authentication.md) for details.
+
+## Chat
 
 ### Create Chat Completion
 
-Generate a model response for a conversation.
+Send messages to generate model responses.
 
 ```http
 POST /v1/chat/completions
@@ -16,7 +37,7 @@ POST /v1/chat/completions
 
 ```json
 {
-  "model": "gpt-3.5-turbo",
+  "model": "gpt-4",
   "messages": [
     {
       "role": "system",
@@ -28,7 +49,6 @@ POST /v1/chat/completions
     }
   ],
   "temperature": 0.7,
-  "max_tokens": 150,
   "stream": false
 }
 ```
@@ -38,17 +58,15 @@ POST /v1/chat/completions
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `model` | string | Yes | - | Model ID to use |
-| `messages` | array | Yes | - | Conversation messages |
+| `messages` | array | Yes | - | Array of message objects |
 | `temperature` | number | No | 1.0 | Sampling temperature (0-2) |
-| `max_tokens` | integer | No | Unlimited | Maximum tokens to generate |
-| `stream` | boolean | No | false | Stream response |
+| `max_tokens` | integer | No | Model default | Maximum tokens to generate |
+| `stream` | boolean | No | false | Stream partial responses |
 | `top_p` | number | No | 1.0 | Nucleus sampling |
 | `n` | integer | No | 1 | Number of completions |
 | `stop` | string/array | No | null | Stop sequences |
 | `presence_penalty` | number | No | 0 | Presence penalty (-2 to 2) |
 | `frequency_penalty` | number | No | 0 | Frequency penalty (-2 to 2) |
-| `logit_bias` | object | No | null | Token bias |
-| `user` | string | No | null | End-user identifier |
 
 **Response:**
 
@@ -57,19 +75,19 @@ POST /v1/chat/completions
   "id": "chatcmpl-123",
   "object": "chat.completion",
   "created": 1677652288,
-  "model": "gpt-3.5-turbo",
+  "model": "gpt-4",
   "choices": [{
     "index": 0,
     "message": {
       "role": "assistant",
-      "content": "Hello! How can I assist you today?"
+      "content": "Hello! How can I help you today?"
     },
     "finish_reason": "stop"
   }],
   "usage": {
-    "prompt_tokens": 9,
-    "completion_tokens": 10,
-    "total_tokens": 19
+    "prompt_tokens": 13,
+    "completion_tokens": 9,
+    "total_tokens": 22
   }
 }
 ```
@@ -78,7 +96,7 @@ POST /v1/chat/completions
 
 When `stream: true`:
 
-```
+```text
 data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"gpt-3.5-turbo","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
 
 data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"gpt-3.5-turbo","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
@@ -88,9 +106,11 @@ data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288
 data: [DONE]
 ```
 
-## Completions
+## Completions (Coming Soon)
 
 ### Create Completion
+
+**Note: This endpoint is coming soon and not yet available.**
 
 Generate text completion (legacy endpoint).
 
@@ -133,7 +153,9 @@ POST /v1/completions
 
 ## Embeddings
 
-### Create Embeddings
+### Create Embeddings (Coming Soon)
+
+**Note: This endpoint is coming soon and not yet available.**
 
 Generate vector representations of text.
 
@@ -178,9 +200,11 @@ POST /v1/embeddings
 }
 ```
 
-## Images
+## Images (Coming Soon)
 
 ### Create Image
+
+**Note: This endpoint is coming soon and not yet available.**
 
 Generate images from text prompts.
 
@@ -224,9 +248,11 @@ POST /v1/images/generations
 }
 ```
 
-## Audio
+## Audio (Coming Soon)
 
 ### Create Transcription
+
+**Note: This endpoint is coming soon and not yet available.**
 
 Convert audio to text.
 
@@ -256,6 +282,8 @@ Content-Type: multipart/form-data
 
 ### Create Translation
 
+**Note: This endpoint is coming soon and not yet available.**
+
 Translate audio to English.
 
 ```http
@@ -284,71 +312,28 @@ GET /v1/models
     {
       "id": "gpt-3.5-turbo",
       "object": "model",
-      "created": 1677652288,
+      "created": 1677610602,
       "owned_by": "openai",
+      "permission": [...],
+      "root": "gpt-3.5-turbo",
+      "parent": null,
       "pricing": {
-        "prompt": 0.0015,
+        "prompt": 0.001,
         "completion": 0.002,
-        "prompt_sats_per_1k": 3,
-        "completion_sats_per_1k": 4
-      }
-    },
-    {
-      "id": "gpt-4",
-      "object": "model",
-      "created": 1677652288,
-      "owned_by": "openai",
-      "pricing": {
-        "prompt": 0.03,
-        "completion": 0.06,
-        "prompt_sats_per_1k": 60,
-        "completion_sats_per_1k": 120
+        "unit": "1k tokens"
       }
     }
   ]
 }
 ```
 
-### Get Model
-
-Get details for a specific model.
-
-```http
-GET /v1/models/{model_id}
-```
-
-**Response:**
-
-```json
-{
-  "id": "gpt-3.5-turbo",
-  "object": "model",
-  "created": 1677652288,
-  "owned_by": "openai",
-  "permission": [{
-    "allow_create_engine": false,
-    "allow_sampling": true,
-    "allow_logprobs": true,
-    "allow_search_indices": false,
-    "allow_view": true,
-    "allow_fine_tuning": false
-  }],
-  "root": "gpt-3.5-turbo",
-  "parent": null,
-  "pricing": {
-    "prompt": 0.0015,
-    "completion": 0.002,
-    "image": 0,
-    "request": 0
-  }
-}
-```
-
 ## Wallet Management
 
-### Create API Key
+### Create Wallet (Coming Soon)
 
-Create a new API key with eCash deposit.
+**Note: This endpoint is coming soon. Currently, you can use Cashu tokens directly as API keys.**
+
+Create a new wallet with eCash deposit.
 
 ```http
 POST /v1/wallet/create
@@ -358,10 +343,8 @@ POST /v1/wallet/create
 
 ```json
 {
-  "cashu_token": "cashuAeyJ0b2tlbiI6W3...",
-  "name": "My API Key",
-  "expires_at": "2024-12-31T23:59:59Z",
-  "refund_npub": "npub1..."
+  "cashu_token": "cashuAeyJ0...",
+  "admin_key": "optional-admin-key"
 }
 ```
 
@@ -369,48 +352,47 @@ POST /v1/wallet/create
 
 ```json
 {
-  "api_key": "rstr_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p",
+  "api_key": "rstr_1234567890abcdef",
+  "admin_key": "radmin_fedcba0987654321",
   "balance": 10000,
-  "created_at": "2024-01-01T00:00:00Z",
-  "expires_at": "2024-12-31T23:59:59Z"
+  "mint": "https://mint.example.com",
+  "unit": "sat"
 }
 ```
 
 ### Check Balance
 
-Get current balance and usage stats.
+Get current wallet balance.
 
 ```http
 GET /v1/wallet/balance
-Authorization: Bearer {api_key}
+Authorization: Bearer rstr_your_api_key
 ```
 
 **Response:**
 
 ```json
 {
-  "balance": 8546,
-  "total_deposited": 10000,
-  "total_spent": 1454,
-  "last_used": "2024-01-01T12:34:56Z",
-  "created_at": "2024-01-01T00:00:00Z"
+  "balance": 8500,
+  "currency": "sat",
+  "reserved": 0
 }
 ```
 
-### Top Up Balance
+### Top Up Wallet
 
-Add funds to existing API key.
+Add funds to existing wallet.
 
 ```http
 POST /v1/wallet/topup
-Authorization: Bearer {api_key}
+Authorization: Bearer rstr_your_api_key
 ```
 
 **Request Body:**
 
 ```json
 {
-  "cashu_token": "cashuAeyJ0b2tlbiI6W3..."
+  "cashu_token": "cashuAeyJ0..."
 }
 ```
 
@@ -418,19 +400,19 @@ Authorization: Bearer {api_key}
 
 ```json
 {
-  "old_balance": 8546,
-  "added_amount": 5000,
-  "new_balance": 13546
+  "balance": 18500,
+  "amount_added": 10000,
+  "currency": "sat"
 }
 ```
 
-### Withdraw Balance
+### Withdraw Funds
 
-Generate eCash token from balance.
+Withdraw balance as eCash.
 
 ```http
 POST /v1/wallet/withdraw
-Authorization: Bearer {api_key}
+Authorization: Bearer rstr_your_api_key
 ```
 
 **Request Body:**
@@ -438,7 +420,7 @@ Authorization: Bearer {api_key}
 ```json
 {
   "amount": 5000,
-  "mint_url": "https://mint.minibits.cash/Bitcoin"
+  "mint": "https://mint.example.com"
 }
 ```
 
@@ -446,64 +428,21 @@ Authorization: Bearer {api_key}
 
 ```json
 {
-  "cashu_token": "cashuAeyJ0b2tlbiI6W3...",
+  "cashu_token": "cashuAeyJ0...",
   "amount": 5000,
-  "mint_url": "https://mint.minibits.cash/Bitcoin"
+  "mint": "https://mint.example.com"
 }
 ```
 
-## Node Information
-
-### Get Node Info
-
-Get public information about the Routstr node.
-
-```http
-GET /v1/info
-```
-
-**Response:**
-
-```json
-{
-  "name": "Lightning AI Gateway",
-  "description": "Fast AI API access with Bitcoin payments",
-  "version": "0.1.1b",
-  "npub": "npub1abc...",
-  "mints": [
-    "https://mint.minibits.cash/Bitcoin",
-    "https://testnut.cashu.space"
-  ],
-  "http_url": "https://api.lightning-ai.com",
-  "onion_url": "http://lightningai.onion",
-  "models": {
-    "gpt-3.5-turbo": {
-      "name": "GPT-3.5 Turbo",
-      "pricing": {
-        "prompt": 0.0015,
-        "completion": 0.002
-      }
-    }
-  }
-}
-```
-
-## Discovery
+## Provider Discovery
 
 ### List Providers
 
-Discover Routstr providers from Nostr relays.
+Get available upstream providers.
 
 ```http
 GET /v1/providers
 ```
-
-**Query Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `relay` | string | Specific relay URL |
-| `limit` | integer | Maximum results |
 
 **Response:**
 
@@ -511,107 +450,55 @@ GET /v1/providers
 {
   "providers": [
     {
-      "name": "Fast AI Node",
-      "npub": "npub1xyz...",
-      "url": "https://fast-ai.com",
-      "description": "Low latency AI API access",
-      "models": ["gpt-3.5-turbo", "gpt-4"],
-      "pricing": {
-        "gpt-3.5-turbo": {
-          "prompt_sats_per_1k": 3,
-          "completion_sats_per_1k": 4
-        }
-      }
+      "name": "openai",
+      "models": ["gpt-4", "gpt-3.5-turbo"],
+      "endpoints": ["chat/completions", "completions"],
+      "status": "active"
     }
   ]
 }
 ```
 
-## Admin Endpoints
+### Provider Info
 
-### Admin Dashboard
-
-Access the web-based admin interface.
+Get specific provider details.
 
 ```http
-GET /admin/
-```
-
-Requires password authentication via web form.
-
-### Admin API
-
-Protected endpoints for node management.
-
-```http
-POST /admin/api/withdraw
-X-Admin-Password: {admin_password}
-```
-
-**Request Body:**
-
-```json
-{
-  "api_key": "rstr_123...",
-  "amount": 5000
-}
-```
-
-## Health & Status
-
-### Health Check
-
-Monitor service health.
-
-```http
-GET /health
+GET /v1/providers/{provider_name}
 ```
 
 **Response:**
 
 ```json
 {
-  "status": "healthy",
-  "version": "0.1.1b",
-  "timestamp": "2024-01-01T00:00:00Z",
-  "checks": {
-    "database": "ok",
-    "upstream": "ok",
-    "mint": "ok"
-  }
+  "name": "openai",
+  "display_name": "OpenAI",
+  "description": "Official OpenAI API",
+  "models": [
+    {
+      "id": "gpt-4",
+      "name": "GPT-4",
+      "context_window": 8192,
+      "pricing": {
+        "prompt": 0.03,
+        "completion": 0.06,
+        "unit": "1k tokens"
+      }
+    }
+  ],
+  "endpoints": ["chat/completions", "completions", "embeddings"],
+  "features": ["streaming", "function_calling"],
+  "status": "active"
 }
 ```
 
-### Metrics
-
-Get service metrics.
-
-```http
-GET /metrics
-```
-
-Returns Prometheus-compatible metrics.
-
-## Deprecated Endpoints
-
-### Legacy Balance Check
-
-```http
-GET /v1/balance
-Authorization: Bearer {api_key}
-```
-
-⚠️ **Deprecated**: Use `/v1/wallet/balance` instead.
-
-## Rate Limits
+## Rate Limiting
 
 All endpoints are subject to rate limiting:
 
-| Endpoint Type | Limit | Window |
-|---------------|-------|--------|
-| AI Generation | 100/min | 1 minute |
-| Wallet Operations | 10/min | 1 minute |
-| Info/Discovery | 60/min | 1 minute |
+- **Per minute**: 60 requests
+- **Per hour**: 1000 requests
+- **Per day**: 10000 requests
 
 Rate limit information is included in response headers.
 

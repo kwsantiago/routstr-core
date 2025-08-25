@@ -8,15 +8,14 @@ Routstr uses API key authentication for all protected endpoints. This guide cove
 
 Create an API key by depositing an eCash token:
 
+**Note: The POST /v1/wallet/create endpoint is coming soon. Currently, you can use Cashu tokens directly as API keys in the Authorization header.**
+
 ```bash
 POST /v1/wallet/create
 Content-Type: application/json
 
 {
-  "cashu_token": "cashuAeyJ0b2tlbiI6W3sibWludCI6Imh0dHBzOi8vbWlu...",
-  "name": "Production Key",
-  "expires_at": "2024-12-31T23:59:59Z",
-  "refund_npub": "npub1abcdef..."
+  "cashu_token": "cashuAeyJ0b2tlbiI6W3sibWludCI6Imh0dHBzOi8vbWlu..."
 }
 ```
 
@@ -25,9 +24,6 @@ Content-Type: application/json
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `cashu_token` | string | Yes | Base64-encoded Cashu token |
-| `name` | string | No | Friendly name for the key |
-| `expires_at` | string | No | ISO 8601 expiration timestamp |
-| `refund_npub` | string | No | Nostr pubkey for refunds |
 
 **Response:**
 
@@ -36,7 +32,6 @@ Content-Type: application/json
   "api_key": "rstr_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p",
   "balance": 10000,
   "created_at": "2024-01-01T00:00:00Z",
-  "expires_at": "2024-12-31T23:59:59Z",
   "key_id": "key_123456"
 }
 ```
@@ -163,12 +158,14 @@ Response:
 ### API Key Storage
 
 **Do:**
+
 - Store keys in environment variables
 - Use secret management systems
 - Encrypt keys at rest
 - Implement key rotation
 
 **Don't:**
+
 - Commit keys to version control
 - Share keys between environments
 - Log keys in plain text
@@ -221,6 +218,7 @@ withdraw_balance(old_key)
 **Status Code:** 401
 
 **Common Causes:**
+
 - Typo in API key
 - Key doesn't exist
 - Key has been deleted
@@ -243,6 +241,7 @@ withdraw_balance(old_key)
 **Status Code:** 401
 
 **Resolution:**
+
 - Create a new API key
 - Contact admin if refund address was set
 
@@ -266,6 +265,7 @@ withdraw_balance(old_key)
 **Status Code:** 402
 
 **Resolution:**
+
 - Top up the API key balance
 - Use a more economical model
 - Optimize request parameters
@@ -284,6 +284,7 @@ curl https://your-node.com/v1/chat/completions \
 ```
 
 Response includes change:
+
 ```
 X-Cashu: cashuAeyJjaGFuZ2UiOlt7...
 ```

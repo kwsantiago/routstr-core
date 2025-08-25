@@ -87,13 +87,19 @@ graph LR
 ### 1. Get Bitcoin/eCash
 
 Options:
+
 - Buy Bitcoin and deposit to a Cashu mint
 - Receive eCash tokens from someone else
 - Use a testnet mint for testing
 
-### 2. Create API Key
+### 2. Use Your eCash
 
-Send your eCash token to Routstr:
+You have two options for using your eCash tokens with Routstr:
+
+#### Option A: Create a Persistent Wallet
+
+Create a wallet with an API key for multiple requests:
+
 ```bash
 POST /v1/wallet/create
 {
@@ -101,15 +107,36 @@ POST /v1/wallet/create
 }
 ```
 
-Receive your API key and balance.
+This returns an API key (`rstr_...`) and your balance. The wallet persists between requests.
+
+#### Option B: Direct Token Usage
+
+Use your Cashu token directly as the API key:
+
+```python
+client = OpenAI(
+    api_key="cashuAeyJ0...",  # Your Cashu token directly
+    base_url="https://api.routstr.com/v1"
+)
+```
+
+Routstr automatically converts the token to access the associated wallet. Each request consumes from the token's balance.
 
 ### 3. Make API Calls
 
-Use your API key like any OpenAI key:
+With either method:
+
 ```python
+# Using persistent wallet API key
 client = OpenAI(
-    api_key="your-routstr-key",
-    base_url="https://your-routstr-node/v1"
+    api_key="rstr_your_api_key",
+    base_url="https://api.routstr.com/v1"
+)
+
+# Or using Cashu token directly
+client = OpenAI(
+    api_key="cashuAeyJ0...",
+    base_url="https://api.routstr.com/v1"
 )
 ```
 
@@ -128,11 +155,11 @@ When done, withdraw remaining balance as eCash through the admin interface.
 Routstr supports all standard OpenAI endpoints:
 
 - ✅ `/v1/chat/completions` - Chat models
-- ✅ `/v1/completions` - Text completion
-- ✅ `/v1/embeddings` - Text embeddings
-- ✅ `/v1/images/generations` - Image generation
-- ✅ `/v1/audio/transcriptions` - Audio to text
-- ✅ `/v1/audio/translations` - Audio translation
+- 🚧 `/v1/completions` - Text completion (Coming soon)
+- 🚧 `/v1/embeddings` - Text embeddings (Coming soon)
+- 🚧 `/v1/images/generations` - Image generation (Coming soon)
+- 🚧 `/v1/audio/transcriptions` - Audio to text (Coming soon)
+- 🚧 `/v1/audio/translations` - Audio translation (Coming soon)
 - ✅ `/v1/models` - List available models
 - ✅ Custom provider endpoints
 
@@ -159,6 +186,7 @@ Total Cost = Base Fee + (Input Tokens * Input Rate) + (Output Tokens * Output Ra
 ```
 
 Fees may include:
+
 - Exchange rate markup (BTC/USD conversion)
 - Provider margin
 - Node operator fee
@@ -180,6 +208,7 @@ Fees may include:
 ### Troubleshooting
 
 Common issues and solutions:
+
 - [Payment Flow](payment-flow.md) - Understanding the payment process
 - [Using the API](using-api.md) - API integration guide
 - [Admin Dashboard](admin-dashboard.md) - Managing your node

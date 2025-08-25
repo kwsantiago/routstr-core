@@ -21,7 +21,7 @@ from openai import OpenAI
 # Initialize client with Routstr endpoint
 client = OpenAI(
     api_key="rstr_your_api_key_here",
-    base_url="https://your-routstr-node.com/v1"
+    base_url="https://api.routstr.com/v1"
 )
 
 # Use exactly like OpenAI
@@ -46,7 +46,7 @@ import OpenAI from 'openai';
 // Initialize client
 const openai = new OpenAI({
     apiKey: 'rstr_your_api_key_here',
-    baseURL: 'https://your-routstr-node.com/v1'
+    baseURL: 'https://api.routstr.com/v1'
 });
 
 // Make a request
@@ -70,7 +70,7 @@ main();
 Direct HTTP requests:
 
 ```bash
-curl https://your-routstr-node.com/v1/chat/completions \
+curl https://api.routstr.com/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer rstr_your_api_key_here" \
   -d '{

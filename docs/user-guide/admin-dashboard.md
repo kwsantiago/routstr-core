@@ -8,7 +8,7 @@ The Routstr admin dashboard provides a web interface for managing your node, vie
 
 The admin dashboard is available at:
 ```
-https://your-routstr-node.com/admin/
+https://api.routstr.com/admin/
 ```
 
 > **Important**: Always include the trailing slash (`/`) in the URL.

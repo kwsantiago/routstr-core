@@ -5,6 +5,7 @@ Understanding how payments work in Routstr is key to using the system effectivel
 ## Overview
 
 Routstr uses a pre-funded account model where:
+
 1. Users deposit eCash tokens to create an API key
 2. Each API request deducts from the balance
 3. Users can withdraw remaining balance as eCash
@@ -16,12 +17,14 @@ Routstr uses a pre-funded account model where:
 Get a Cashu token from any compatible source:
 
 **Option A: From a Cashu Wallet**
+
 ```bash
 # Example: Creating a 10,000 sat token
 cashu send 10000
 ```
 
 **Option B: Lightning Invoice**
+
 ```bash
 # Some mints support direct Lightning deposits
 curl -X POST https://mint.example.com/v1/mint/quote/bolt11 \
@@ -29,6 +32,7 @@ curl -X POST https://mint.example.com/v1/mint/quote/bolt11 \
 ```
 
 **Option C: Test Tokens**
+
 ```bash
 # Get test tokens from testnet mints
 # Check mint documentation for faucets
@@ -36,31 +40,28 @@ curl -X POST https://mint.example.com/v1/mint/quote/bolt11 \
 
 ### Step 2: Create API Key
 
+**Note: The POST /v1/wallet/create endpoint is coming soon. Currently, you can use Cashu tokens directly as API keys in the Authorization header.**
+
 Send your token to Routstr:
 
 ```bash
-curl -X POST https://your-routstr-node/v1/wallet/create \
+curl -X POST https://api.routstr.com/v1/wallet/create \
   -H "Content-Type: application/json" \
   -d '{
-    "cashu_token": "cashuAeyJ0b2tlbiI6W3sibWludCI6Imh0dHBzOi8vbWlu...",
-    "name": "My Project Key",
-    "expires_at": "2024-12-31T23:59:59Z",
-    "refund_npub": "npub1abc..."
+    "cashu_token": "cashuAeyJ0b2tlbiI6W3sibWludCI6Imh0dHBzOi8vbWlu..."
   }'
 ```
 
 **Request Parameters:**
+
 - `cashu_token` (required): The eCash token to deposit
-- `name` (optional): Friendly name for the key
-- `expires_at` (optional): ISO timestamp for key expiration
-- `refund_npub` (optional): Nostr pubkey for refunds
 
 **Response:**
+
 ```json
 {
   "api_key": "rstr_1234567890abcdef",
   "balance": 10000000,
-  "expires_at": "2024-12-31T23:59:59Z",
   "created_at": "2024-01-01T00:00:00Z"
 }
 ```
@@ -70,11 +71,12 @@ curl -X POST https://your-routstr-node/v1/wallet/create \
 Check your key's balance:
 
 ```bash
-curl -X GET https://your-routstr-node/v1/wallet/balance \
+curl -X GET https://api.routstr.com/v1/wallet/balance \
   -H "Authorization: Bearer rstr_1234567890abcdef"
 ```
 
 Response:
+
 ```json
 {
   "balance": 10000000,
@@ -113,7 +115,7 @@ import openai
 
 client = openai.OpenAI(
     api_key="rstr_1234567890abcdef",
-    base_url="https://your-routstr-node/v1"
+    base_url="https://api.routstr.com/v1"
 )
 
 # Make request
@@ -133,6 +135,7 @@ print(f"Total tokens: {response.usage.total_tokens}")
 ### Cost Breakdown
 
 For the above request:
+
 ```
 Model: gpt-3.5-turbo
 Input tokens: 13
@@ -155,16 +158,17 @@ Track your usage in real-time:
 
 ```bash
 # Get current balance
-curl -X GET https://your-routstr-node/v1/wallet/balance \
+curl -X GET https://api.routstr.com/v1/wallet/balance \
   -H "Authorization: Bearer your-api-key"
 
 # View recent transactions (through admin dashboard)
-# Access at https://your-routstr-node/admin/
+# Access at https://api.routstr.com/admin/
 ```
 
 ### Low Balance Handling
 
 When balance is insufficient:
+
 ```json
 {
   "error": {
@@ -180,7 +184,7 @@ When balance is insufficient:
 Add funds to existing key:
 
 ```bash
-curl -X POST https://your-routstr-node/v1/wallet/topup \
+curl -X POST https://api.routstr.com/v1/wallet/topup \
   -H "Authorization: Bearer your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -201,7 +205,7 @@ curl -X POST https://your-routstr-node/v1/wallet/topup \
 ### Via API (if enabled)
 
 ```bash
-curl -X POST https://your-routstr-node/v1/wallet/withdraw \
+curl -X POST https://api.routstr.com/v1/wallet/withdraw \
   -H "Authorization: Bearer your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -215,6 +219,7 @@ curl -X POST https://your-routstr-node/v1/wallet/withdraw \
 ### Token Validation
 
 Routstr validates tokens by:
+
 1. Checking signature validity
 2. Verifying with the issuing mint
 3. Ensuring no double-spending
@@ -223,6 +228,7 @@ Routstr validates tokens by:
 ### Failed Payments
 
 Common failure reasons:
+
 - Invalid token signature
 - Already spent token
 - Untrusted mint
@@ -231,7 +237,7 @@ Common failure reasons:
 ### Refund Policy
 
 - Unused balance can be withdrawn anytime
-- Expired keys with balance can be refunded to `refund_npub`
+- Expired keys with balance can be refunded
 - Node operators may have additional policies
 
 ## Advanced Features
@@ -239,11 +245,13 @@ Common failure reasons:
 ### Multi-Mint Support
 
 Routstr accepts tokens from multiple mints:
+
 ```bash
 CASHU_MINTS=https://mint1.com,https://mint2.com,https://mint3.com
 ```
 
 Benefits:
+
 - Redundancy if one mint is down
 - User choice of mints
 - Geographic distribution
@@ -251,11 +259,13 @@ Benefits:
 ### Automatic Payouts
 
 Configure automatic Lightning payouts:
+
 ```bash
 RECEIVE_LN_ADDRESS=satoshi@getalby.com
 ```
 
 When enabled:
+
 - Balances above threshold are swept
 - Converted to Lightning payments
 - Sent to configured address
@@ -263,14 +273,16 @@ When enabled:
 ### Per-Request Payments (Coming Soon)
 
 Future support for Nut-24 headers:
+
 ```bash
-curl -X POST https://your-routstr-node/v1/chat/completions \
+curl -X POST https://api.routstr.com/v1/chat/completions \
   -H "x-cashu: cashuAeyJ0..." \
   -H "Content-Type: application/json" \
   -d '{...}'
 ```
 
 Response includes change:
+
 ```
 HTTP/1.1 200 OK
 x-cashu: cashuAeyJjaGFuZ2Ui...
@@ -331,11 +343,13 @@ x-cashu: cashuAeyJjaGFuZ2Ui...
 ### Payment Rejected
 
 **Error:** "Invalid token"
+
 - Check token format
 - Verify mint is trusted
 - Ensure not already spent
 
 **Error:** "Insufficient value"
+
 - Token value too low
 - Check current pricing
 - Add larger token

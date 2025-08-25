@@ -5,7 +5,7 @@ Routstr Core provides a complete OpenAI-compatible API with additional endpoints
 ## Base URL
 
 ```
-https://your-routstr-node.com/v1
+https://api.routstr.com/v1
 ```
 
 All API endpoints are prefixed with `/v1` for versioning.
@@ -91,10 +91,10 @@ All errors follow a consistent format:
 Standard OpenAI-compatible endpoints:
 
 - **Chat Completions**: `/v1/chat/completions`
-- **Completions**: `/v1/completions`
-- **Embeddings**: `/v1/embeddings`
-- **Images**: `/v1/images/generations`
-- **Audio**: `/v1/audio/transcriptions`
+- **Completions**: `/v1/completions` *(Coming soon)*
+- **Embeddings**: `/v1/embeddings` *(Coming soon)*
+- **Images**: `/v1/images/generations` *(Coming soon)*
+- **Audio**: `/v1/audio/transcriptions` *(Coming soon)*
 - **Models**: `/v1/models`
 
 ### Payment Endpoints
