@@ -7,6 +7,7 @@ The Routstr admin dashboard provides a web interface for managing your node, vie
 ### URL Format
 
 The admin dashboard is available at:
+
 ```
 https://api.routstr.com/admin/
 ```
@@ -82,6 +83,7 @@ Click on any key to view:
 ### Viewing Balances
 
 Balances are displayed in multiple units:
+
 - **Sats**: Standard satoshi units
 - **mSats**: Millisatoshis (internal precision)
 - **BTC**: Bitcoin decimal format
@@ -90,6 +92,7 @@ Balances are displayed in multiple units:
 ### Balance History
 
 View balance changes over time:
+
 ```
 Time         | Type      | Amount  | Balance | Description
 -------------|-----------|---------|---------|-------------
@@ -123,6 +126,7 @@ For multiple withdrawals:
 ### Automatic Withdrawals
 
 If configured with `RECEIVE_LN_ADDRESS`:
+
 - Balances above threshold auto-convert to Lightning
 - Sent to configured Lightning address
 - View payout history in dashboard
@@ -132,6 +136,7 @@ If configured with `RECEIVE_LN_ADDRESS`:
 ### Viewing Settings
 
 Current node configuration is displayed:
+
 - Upstream provider URL
 - Enabled features
 - Pricing model
@@ -152,6 +157,7 @@ View supported models and their pricing:
 > **Note**: Configuration changes require node restart.
 
 To update settings:
+
 1. Modify environment variables
 2. Restart the node
 3. Verify changes in dashboard
@@ -170,6 +176,7 @@ View comprehensive usage data:
 ### Performance Metrics
 
 Monitor node performance:
+
 - Average response time
 - Request success rate
 - Upstream API latency
@@ -178,6 +185,7 @@ Monitor node performance:
 ### Export Data
 
 Export analytics data:
+
 1. Select date range
 2. Choose metrics
 3. Click "Export"
@@ -195,6 +203,7 @@ Export analytics data:
 ### Security Log
 
 View security events:
+
 ```
 2024-01-15 12:34:56 | Login Success | IP: 192.168.1.1
 2024-01-15 12:35:12 | Withdrawal | Key: rstr_abcd | Amount: 5000
@@ -213,10 +222,12 @@ View security events:
 ### Cannot Access Dashboard
 
 **Issue**: 404 Not Found
+
 - Ensure trailing slash: `/admin/`
 - Check if admin routes are enabled
 
 **Issue**: Unauthorized
+
 - Verify `ADMIN_PASSWORD` is set
 - Clear browser cookies
 - Try incognito/private mode
@@ -224,11 +235,13 @@ View security events:
 ### Display Issues
 
 **Issue**: Broken Layout
+
 - Clear browser cache
 - Disable ad blockers
 - Try different browser
 
 **Issue**: Missing Data
+
 - Check database connectivity
 - Verify node is running
 - Review error logs
@@ -236,11 +249,13 @@ View security events:
 ### Withdrawal Problems
 
 **Issue**: Token Generation Fails
+
 - Check mint connectivity
 - Verify sufficient balance
 - Try different mint
 
 **Issue**: Invalid Token
+
 - Ensure complete token copy
 - Check token hasn't expired
 - Verify mint compatibility
@@ -250,6 +265,7 @@ View security events:
 ### Custom Branding
 
 Customize dashboard appearance:
+
 ```bash
 # Environment variables
 ADMIN_LOGO_URL=https://example.com/logo.png
@@ -275,6 +291,7 @@ curl -X GET https://your-node.com/admin/api/keys \
 ### Webhooks
 
 Configure notifications:
+
 ```bash
 ADMIN_WEBHOOK_URL=https://example.com/webhook
 ADMIN_WEBHOOK_EVENTS=withdrawal,low_balance,error
@@ -299,6 +316,7 @@ ADMIN_WEBHOOK_EVENTS=withdrawal,low_balance,error
 ## Mobile Access
 
 The dashboard is mobile-responsive:
+
 - Touch-optimized controls
 - Swipe navigation
 - Compact view mode
