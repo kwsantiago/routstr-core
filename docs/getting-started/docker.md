@@ -126,6 +126,7 @@ UPSTREAM_PROVIDER_FEE=1.05
 ### Dockerfile Overview
 
 The provided Dockerfile:
+
 - Uses Alpine Linux for small size
 - Installs required dependencies for secp256k1
 - Runs as non-root user
@@ -218,6 +219,7 @@ api.yournode.com {
 ### Log Management
 
 View logs:
+
 ```bash
 # Docker
 docker logs -f routstr
@@ -232,6 +234,7 @@ tail -f ./logs/routstr.log
 ### Metrics
 
 Monitor key metrics:
+
 - Request count and latency
 - Token validation success rate
 - Upstream API errors
@@ -332,4 +335,3 @@ docker exec routstr nslookup api.openai.com
 
 - [Configuration Guide](configuration.md) - All environment variables
 - [Admin Dashboard](../user-guide/admin-dashboard.md) - Manage your node
-- [Monitoring](../advanced/monitoring.md) - Set up observability

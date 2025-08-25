@@ -60,7 +60,7 @@ curl -X POST https://api.routstr.com/v1/wallet/create \
 
 ```json
 {
-  "api_key": "rstr_1234567890abcdef",
+  "api_key": "sk-1234567890abcdef",
   "balance": 10000000,
   "created_at": "2024-01-01T00:00:00Z"
 }
@@ -72,7 +72,7 @@ Check your key's balance:
 
 ```bash
 curl -X GET https://api.routstr.com/v1/wallet/balance \
-  -H "Authorization: Bearer rstr_1234567890abcdef"
+  -H "Authorization: Bearer sk-1234567890abcdef"
 ```
 
 Response:
@@ -114,7 +114,7 @@ Costs are calculated based on:
 import openai
 
 client = openai.OpenAI(
-    api_key="rstr_1234567890abcdef",
+    api_key="sk-1234567890abcdef",
     base_url="https://api.routstr.com/v1"
 )
 

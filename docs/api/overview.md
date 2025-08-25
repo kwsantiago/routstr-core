@@ -15,14 +15,22 @@ All API endpoints are prefixed with `/v1` for versioning.
 Routstr uses API keys for authentication. Include your key in the Authorization header:
 
 ```bash
-Authorization: Bearer rstr_your_api_key_here
+Authorization: Bearer sk-...
 ```
 
 ### API Key Format
 
-- Prefix: `rstr_`
+- Prefix: `sk-`
 - Length: 32 characters
-- Example: `rstr_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p`
+- Example: `sk-1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p`
+
+### Cashu Tokens as Authentication
+
+You can also use a Cashu eCash token directly in the `Authorization` header. The server hashes the token internally; this hash represents your API key identity and carries the token's balance.
+
+```bash
+Authorization: Bearer cashuAeyJ0b2tlbiI6W3...
+```
 
 ## Content Types
 
@@ -47,6 +55,7 @@ Rate limits are applied per API key:
 - **Concurrent**: 10 simultaneous requests
 
 Rate limit headers:
+
 ```
 X-RateLimit-Limit: 1000
 X-RateLimit-Remaining: 999
@@ -172,6 +181,7 @@ GET /openapi.json
 ```
 
 Interactive documentation:
+
 ```
 GET /docs        # Swagger UI
 GET /redoc       # ReDoc
@@ -182,29 +192,32 @@ GET /redoc       # ReDoc
 Routstr is compatible with official OpenAI SDKs:
 
 ### Python
+
 ```python
 from openai import OpenAI
 
 client = OpenAI(
-    api_key="rstr_your_key",
+    api_key="sk-...",
     base_url="https://your-node.com/v1"
 )
 ```
 
 ### JavaScript/TypeScript
+
 ```javascript
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
-    apiKey: 'rstr_your_key',
+    apiKey: 'sk-...',
     baseURL: 'https://your-node.com/v1'
 });
 ```
 
 ### cURL
+
 ```bash
 curl https://your-node.com/v1/chat/completions \
-  -H "Authorization: Bearer rstr_your_key" \
+  -H "Authorization: Bearer sk-..." \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-3.5-turbo","messages":[{"role":"user","content":"Hello"}]}'
 ```
@@ -223,6 +236,7 @@ POST /v1/webhooks
 ```
 
 Events are sent with signature verification:
+
 ```
 X-Webhook-Signature: sha256=...
 ```
@@ -265,6 +279,7 @@ Access-Control-Max-Age: 86400
 ## Compression
 
 Responses are compressed with gzip when:
+
 - Client sends `Accept-Encoding: gzip`
 - Response is larger than 1KB
 - Content type is compressible
@@ -278,6 +293,7 @@ GET /v1/transactions?limit=50&offset=100
 ```
 
 Response includes pagination metadata:
+
 ```json
 {
   "data": [...],

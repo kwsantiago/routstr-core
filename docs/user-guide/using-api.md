@@ -5,6 +5,7 @@ This guide shows how to integrate Routstr with your applications using various p
 ## API Compatibility
 
 Routstr maintains full compatibility with the OpenAI API, meaning:
+
 - Existing OpenAI client libraries work without modification
 - Only the base URL and API key need to change
 - All parameters and responses match OpenAI's format
@@ -20,7 +21,7 @@ from openai import OpenAI
 
 # Initialize client with Routstr endpoint
 client = OpenAI(
-    api_key="rstr_your_api_key_here",
+    api_key="sk-...",
     base_url="https://api.routstr.com/v1"
 )
 
@@ -45,7 +46,7 @@ import OpenAI from 'openai';
 
 // Initialize client
 const openai = new OpenAI({
-    apiKey: 'rstr_your_api_key_here',
+    apiKey: 'sk-...',
     baseURL: 'https://api.routstr.com/v1'
 });
 
@@ -72,7 +73,7 @@ Direct HTTP requests:
 ```bash
 curl https://api.routstr.com/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer rstr_your_api_key_here" \
+  -H "Authorization: Bearer sk-..." \
   -d '{
     "model": "gpt-3.5-turbo",
     "messages": [
@@ -265,7 +266,7 @@ import httpx
 
 # Configure timeout and retries
 client = OpenAI(
-    api_key="rstr_your_key",
+    api_key="sk-...",
     base_url="https://your-node.com/v1",
     timeout=httpx.Timeout(60.0, connect=5.0),
     max_retries=2
@@ -290,7 +291,7 @@ proxies = {
 http_client = httpx.Client(proxies=proxies)
 
 client = OpenAI(
-    api_key="rstr_your_key",
+    api_key="sk-...",
     base_url="http://your-onion-address.onion/v1",
     http_client=http_client
 )
@@ -309,7 +310,7 @@ class CustomClient(httpx.Client):
         self.headers["X-Custom-Header"] = "value"
 
 client = OpenAI(
-    api_key="rstr_your_key",
+    api_key="sk-...",
     base_url="https://your-node.com/v1",
     http_client=CustomClient()
 )
@@ -324,7 +325,7 @@ import asyncio
 from openai import AsyncOpenAI
 
 async_client = AsyncOpenAI(
-    api_key="rstr_your_key",
+    api_key="sk-...",
     base_url="https://your-node.com/v1"
 )
 
@@ -492,29 +493,32 @@ def test_routstr_connection():
 ### Common Issues
 
 **SSL Certificate Errors**
+
 ```python
 # For development only - not for production!
 import ssl
 import httpx
 
 client = OpenAI(
-    api_key="rstr_key",
+    api_key="sk-...",
     base_url="https://localhost:8000/v1",
     http_client=httpx.Client(verify=False)
 )
 ```
 
 **Timeout Issues**
+
 ```python
 # Increase timeout for slow connections
 client = OpenAI(
-    api_key="rstr_key",
+    api_key="sk-...",
     base_url="https://your-node.com/v1",
     timeout=httpx.Timeout(120.0)  # 2 minutes
 )
 ```
 
 **Debugging Requests**
+
 ```python
 import logging
 import httpx

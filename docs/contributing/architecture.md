@@ -309,6 +309,7 @@ logger.info("api_request", extra={
 ### Metrics Collection
 
 Key metrics tracked:
+
 - Request rate by endpoint
 - Token usage by model
 - Balance changes
@@ -368,6 +369,7 @@ FROM python:3.11-slim
 ### Technical Debt
 
 Areas for improvement:
+
 - Database query optimization
 - Response caching layer
 - Metric aggregation
@@ -377,5 +379,3 @@ Areas for improvement:
 
 - Review [Code Structure](code-structure.md) for detailed organization
 - See [Testing Guide](testing.md) for test architecture
-- Check [Database Guide](database.md) for schema details
-- Read [Guidelines](guidelines.md) for coding standards

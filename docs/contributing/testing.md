@@ -5,6 +5,7 @@ This guide covers testing practices, patterns, and tools used in Routstr Core de
 ## Testing Philosophy
 
 We follow these principles:
+
 - **Test Behavior, Not Implementation** - Tests should survive refactoring
 - **Fast Feedback** - Unit tests run in milliseconds
 - **Reliable Tests** - No flaky tests allowed
@@ -100,7 +101,7 @@ class TestAPIKeyAuth:
         )
         
         # Assert
-        assert api_key.key.startswith("rstr_")
+        assert api_key.key.startswith("sk-")
         assert len(api_key.key) == 32
         assert api_key.balance == initial_balance
         
@@ -385,7 +386,7 @@ from datetime import datetime, timedelta
 def create_test_api_key(**kwargs):
     """Factory for test API keys"""
     defaults = {
-        "key": f"rstr_test_{uuid4().hex[:8]}",
+        "key": f"sk-test-{uuid4().hex[:8]}",
         "balance": 10000,
         "created_at": datetime.utcnow(),
         "expires_at": datetime.utcnow() + timedelta(days=30)
@@ -414,7 +415,7 @@ TEST_MODELS = {
     }
 }
 
-TEST_API_KEY = "rstr_test_1234567890"
+TEST_API_KEY = "sk-test-1234567890"
 TEST_MINT_URL = "https://testmint.example.com"
 ```
 
@@ -498,6 +499,7 @@ async def test_logging(caplog):
 ### GitHub Actions
 
 Tests run automatically on:
+
 - Pull requests
 - Pushes to main
 - Nightly schedules
@@ -542,6 +544,7 @@ pre-commit run --all-files
 ### Common Issues
 
 **Async Test Errors**
+
 ```python
 # Wrong
 def test_async():  # Missing async
@@ -553,6 +556,7 @@ async def test_async():
 ```
 
 **Database State**
+
 ```python
 # Ensure clean state
 @pytest.fixture(autouse=True)
@@ -564,6 +568,7 @@ async def cleanup(test_db):
 ```
 
 **Mock Not Working**
+
 ```python
 # Check import path
 mocker.patch("routstr.wallet.Wallet")  # Full path
@@ -572,7 +577,5 @@ mocker.patch("routstr.wallet.Wallet")  # Full path
 
 ## Next Steps
 
-- Review [Database Guide](database.md) for schema testing
-- Check [Guidelines](guidelines.md) for code standards
 - See [Architecture](architecture.md) for system design
 - Read [Setup Guide](setup.md) for environment setup

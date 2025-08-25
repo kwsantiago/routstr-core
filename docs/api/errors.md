@@ -220,6 +220,7 @@ All errors follow a consistent JSON structure:
 
 **Status:** 429  
 **Headers:**
+
 ```
 X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 0
@@ -547,7 +548,7 @@ async def test_insufficient_balance_handling():
 async def test_real_error_scenarios():
     # Test with invalid API key
     invalid_client = OpenAI(
-        api_key="rstr_invalid",
+        api_key="sk-invalid",
         base_url=test_url
     )
     

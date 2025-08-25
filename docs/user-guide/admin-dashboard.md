@@ -206,7 +206,7 @@ View security events:
 
 ```
 2024-01-15 12:34:56 | Login Success | IP: 192.168.1.1
-2024-01-15 12:35:12 | Withdrawal | Key: rstr_abcd | Amount: 5000
+2024-01-15 12:35:12 | Withdrawal | Key: sk-****abcd | Amount: 5000
 2024-01-15 12:40:00 | Session Timeout | IP: 192.168.1.1
 ```
 

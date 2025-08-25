@@ -8,7 +8,7 @@ Routstr uses API key authentication for all protected endpoints. This guide cove
 
 Create an API key by depositing an eCash token:
 
-**Note: The POST /v1/wallet/create endpoint is coming soon. Currently, you can use Cashu tokens directly as API keys in the Authorization header.**
+**Note: The POST /v1/wallet/create endpoint is coming soon. Currently, you can use Cashu tokens directly as API credentials in the Authorization header. The token is hashed on the server, and the hash acts as an API key with the token's balance.**
 
 ```bash
 POST /v1/wallet/create
@@ -29,7 +29,7 @@ Content-Type: application/json
 
 ```json
 {
-  "api_key": "rstr_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p",
+  "api_key": "sk-1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p",
   "balance": 10000,
   "created_at": "2024-01-01T00:00:00Z",
   "key_id": "key_123456"
@@ -58,7 +58,7 @@ Include the API key in the Authorization header:
 
 ```bash
 curl https://your-node.com/v1/chat/completions \
-  -H "Authorization: Bearer rstr_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p" \
+  -H "Authorization: Bearer sk-1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p" \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-3.5-turbo","messages":[{"role":"user","content":"Hello"}]}'
 ```
@@ -68,7 +68,7 @@ curl https://your-node.com/v1/chat/completions \
 For tools that don't support headers:
 
 ```bash
-GET /v1/models?api_key=rstr_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p
+GET /v1/models?api_key=sk-1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p
 ```
 
 ⚠️ **Warning**: Query parameters may be logged. Use headers when possible.
@@ -81,7 +81,7 @@ Get current balance and usage statistics:
 
 ```bash
 GET /v1/wallet/balance
-Authorization: Bearer rstr_your_api_key
+Authorization: Bearer sk-...
 
 Response:
 {
@@ -104,7 +104,7 @@ Add funds to existing key:
 
 ```bash
 POST /v1/wallet/topup
-Authorization: Bearer rstr_your_api_key
+Authorization: Bearer sk-...
 Content-Type: application/json
 
 {
@@ -126,7 +126,7 @@ View transaction history:
 
 ```bash
 GET /v1/wallet/transactions?limit=10
-Authorization: Bearer rstr_your_api_key
+Authorization: Bearer sk-...
 
 Response:
 {
@@ -175,7 +175,7 @@ Response:
 
 ```bash
 # .env file
-ROUTSTR_API_KEY=rstr_1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p
+ROUTSTR_API_KEY=sk-1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p
 ROUTSTR_BASE_URL=https://your-node.com/v1
 
 # Usage in code
@@ -313,7 +313,7 @@ Create sub-keys with limited permissions:
 
 ```bash
 POST /v1/wallet/create/subkey
-Authorization: Bearer rstr_parent_key
+Authorization: Bearer sk-parent-key
 Content-Type: application/json
 
 {
@@ -375,7 +375,7 @@ Restrict API key usage by IP:
 
 ```bash
 POST /v1/wallet/update
-Authorization: Bearer rstr_your_api_key
+Authorization: Bearer sk-...
 Content-Type: application/json
 
 {
@@ -394,7 +394,7 @@ Set up usage notifications:
 
 ```bash
 POST /v1/wallet/alerts
-Authorization: Bearer rstr_your_api_key
+Authorization: Bearer sk-...
 Content-Type: application/json
 
 {

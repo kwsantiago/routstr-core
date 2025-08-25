@@ -46,6 +46,7 @@ make setup
 ```
 
 This will:
+
 - ✅ Install uv if not present
 - ✅ Create a virtual environment
 - ✅ Install all dependencies
@@ -61,6 +62,7 @@ cp .env.example .env
 ```
 
 Edit `.env` with your configuration:
+
 ```bash
 # Minimum required for development
 UPSTREAM_BASE_URL=https://api.openai.com/v1
@@ -213,6 +215,7 @@ routstr-core/
 5. Add integration tests
 
 Example:
+
 ```python
 # In routstr/core/main.py or appropriate router
 @app.get("/v1/stats")
@@ -232,6 +235,7 @@ async def get_stats(
 4. Apply: `make db-upgrade`
 
 Example:
+
 ```python
 class Transaction(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
@@ -282,12 +286,14 @@ make docker-build # Build Docker image
 #### VS Code
 
 Recommended extensions:
+
 - Python
 - Pylance
 - Ruff
 - GitLens
 
 Settings (`.vscode/settings.json`):
+
 ```json
 {
     "python.linting.enabled": true,
@@ -333,6 +339,7 @@ uv run pytest tests/unit/test_auth.py --pdb
 ### Common Issues
 
 **Import Errors**
+
 ```bash
 # Ensure project is installed in editable mode
 uv sync
@@ -340,6 +347,7 @@ uv pip install -e .
 ```
 
 **Database Errors**
+
 ```bash
 # Reset database
 rm dev.db
@@ -347,6 +355,7 @@ make db-upgrade
 ```
 
 **Type Checking Fails**
+
 ```bash
 # Clear mypy cache
 make clean
@@ -354,6 +363,7 @@ make type-check
 ```
 
 **Tests Fail Locally**
+
 ```bash
 # Ensure test dependencies are installed
 uv sync --dev
@@ -365,7 +375,6 @@ rm -rf test_*.db
 ### Getting Help
 
 - Check existing [GitHub Issues](https://github.com/routstr/routstr-core/issues)
-- Review [Contributing Guidelines](guidelines.md)
 - Ask in [GitHub Discussions](https://github.com/routstr/routstr-core/discussions)
 - Read the [Architecture Guide](architecture.md)
 
@@ -374,7 +383,6 @@ rm -rf test_*.db
 Now that you're set up:
 
 1. Read the [Architecture Overview](architecture.md)
-2. Review [Code Standards](guidelines.md)
 3. Check [open issues](https://github.com/routstr/routstr-core/issues)
 4. Start with a small contribution
 

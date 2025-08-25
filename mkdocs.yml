@@ -93,8 +93,6 @@ nav:
       - Architecture: contributing/architecture.md
       - Code Structure: contributing/code-structure.md
       - Testing: contributing/testing.md
-      - Database: contributing/database.md
-      - Guidelines: contributing/guidelines.md
   - API Reference:
       - Overview: api/overview.md
       - Authentication: api/authentication.md

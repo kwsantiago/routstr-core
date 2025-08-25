@@ -69,6 +69,7 @@ routstr-core/
 ### Application Entry Point
 
 #### `routstr/__init__.py`
+
 ```python
 # Loads environment variables
 import dotenv
@@ -79,6 +80,7 @@ from .core.main import app as fastapi_app
 ```
 
 #### `routstr/core/main.py`
+
 ```python
 # FastAPI application setup
 app = FastAPI(
@@ -118,6 +120,7 @@ async def protected_route(api_key: APIKey = Depends(APIKeyAuth())):
 ```
 
 Key functions:
+
 - `create_api_key()` - Generate new API keys
 - `validate_api_key()` - Verify and retrieve key
 - `check_balance()` - Ensure sufficient funds
@@ -202,6 +205,7 @@ async def proxy_request(
 ```
 
 Key features:
+
 - Streaming support
 - Header preservation
 - Error handling
@@ -257,6 +261,7 @@ async def withdraw_balance(
 ```
 
 Features:
+
 - HTML dashboard
 - API key management
 - Balance withdrawals
@@ -485,6 +490,4 @@ except SpecificError as e:
 ## Next Steps
 
 - Review [Testing Guide](testing.md) for test structure
-- See [Database Guide](database.md) for schema details
-- Check [Guidelines](guidelines.md) for coding standards
 - Read [Architecture](architecture.md) for system design

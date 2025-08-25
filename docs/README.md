@@ -23,8 +23,6 @@ docs/
 │   ├── architecture.md    # System architecture
 │   ├── code-structure.md  # Codebase organization
 │   ├── testing.md         # Testing guide
-│   ├── database.md        # Database design
-│   └── guidelines.md      # Contribution guidelines
 ├── api/                   # API reference
 │   ├── overview.md        # API overview
 │   ├── authentication.md  # Auth details
@@ -63,7 +61,7 @@ mkdocs serve
 make docs-serve
 ```
 
-Visit http://localhost:8001 to view the documentation.
+Visit <http://localhost:8000> to view the documentation.
 
 ### Building Static Site
 
@@ -130,6 +128,7 @@ graph LR
     A[Client] --> B[Routstr]
     B --> C[Provider]
 ```
+
 ```
 
 #### Code Blocks
@@ -139,6 +138,7 @@ graph LR
 def example():
     return "Hello, Routstr!"
 ```
+
 ```
 
 ## Contributing to Docs

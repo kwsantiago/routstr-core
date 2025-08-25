@@ -5,6 +5,7 @@ This guide covers database schema management using Alembic migrations in Routstr
 ## Overview
 
 Routstr uses Alembic for database migrations with these features:
+
 - **Automatic migrations** on startup
 - **Version control** for schema changes
 - **Rollback capability** for safety
@@ -27,6 +28,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
 ```
 
 This ensures:
+
 - ✅ Database is always up-to-date
 - ✅ No manual migration steps in production
 - ✅ Zero-downtime deployments
@@ -35,6 +37,7 @@ This ensures:
 ### Migration Safety
 
 Migrations are designed to be safe:
+
 - Idempotent (can run multiple times)
 - Non-destructive by default
 - Tested before release
@@ -404,6 +407,7 @@ async def test_migration_with_data():
 Strategy for seamless updates:
 
 1. **Make migrations backwards compatible**
+
    ```python
    # Good: Add nullable column
    op.add_column('apikey', sa.Column('new_field', sa.String(), nullable=True))
@@ -413,6 +417,7 @@ Strategy for seamless updates:
    ```
 
 2. **Deploy in phases**
+
    ```bash
    # Phase 1: Deploy code that works with both schemas
    # Phase 2: Run migration
@@ -421,6 +426,7 @@ Strategy for seamless updates:
    ```
 
 3. **Use feature flags**
+
    ```python
    if feature_enabled('use_new_schema'):
        # Use new column
@@ -478,6 +484,7 @@ alembic current
 ### Common Issues
 
 **Migration Conflicts**
+
 ```bash
 # Multiple heads detected
 alembic heads
@@ -489,6 +496,7 @@ alembic merge -m "Merge migrations" a1b2c3 b2c3d4
 ```
 
 **Failed Migration**
+
 ```python
 # Add rollback logic
 def upgrade():
@@ -505,6 +513,7 @@ def downgrade():
 ```
 
 **Lock Timeout**
+
 ```python
 # Add timeout handling
 def upgrade():
@@ -526,12 +535,14 @@ def upgrade():
 If migration fails in production:
 
 1. **Check current state**
+
    ```bash
    alembic current
    alembic history
    ```
 
 2. **Manual rollback if needed**
+
    ```sql
    -- Check migration table
    SELECT * FROM alembic_version;
@@ -541,6 +552,7 @@ If migration fails in production:
    ```
 
 3. **Fix and retry**
+
    ```bash
    # Fix migration file
    vim migrations/versions/problematic_migration.py
@@ -563,6 +575,7 @@ If migration fails in production:
    - Test database-specific features
 
 3. **Document breaking changes**
+
    ```python
    """BREAKING: Change balance column type
    
@@ -575,6 +588,7 @@ If migration fails in production:
    ```
 
 4. **Make migrations idempotent**
+
    ```python
    def upgrade():
        # Check if column exists
@@ -591,6 +605,7 @@ If migration fails in production:
 ### Performance Considerations
 
 1. **Add indexes concurrently (PostgreSQL)**
+
    ```python
    def upgrade():
        # Create index without locking table
@@ -603,6 +618,7 @@ If migration fails in production:
    ```
 
 2. **Batch large updates**
+
    ```python
    def upgrade():
        connection = op.get_bind()
@@ -626,6 +642,5 @@ If migration fails in production:
 
 ## Next Steps
 
-- [Database Guide](../contributing/database.md) - Database design details
 - [Testing Guide](../contributing/testing.md) - Testing migrations
 - [Deployment](../getting-started/docker.md) - Production deployment

@@ -107,7 +107,7 @@ POST /v1/wallet/create
 }
 ```
 
-This returns an API key (`rstr_...`) and your balance. The wallet persists between requests.
+This returns an API key (`sk-...`) and your balance. The wallet persists between requests.
 
 #### Option B: Direct Token Usage
 
@@ -129,7 +129,7 @@ With either method:
 ```python
 # Using persistent wallet API key
 client = OpenAI(
-    api_key="rstr_your_api_key",
+    api_key="sk-...",
     base_url="https://api.routstr.com/v1"
 )
 

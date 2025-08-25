@@ -18,7 +18,7 @@ https://api.routstr.com/v1
 
 All endpoints require authentication via:
 
-- **Bearer Token**: `Authorization: Bearer rstr_your_api_key`
+- **Bearer Token**: `Authorization: Bearer sk-...` or `Authorization: Bearer cashuAeyJ0...`
 - **X-Cashu Header**: `X-Cashu: cashuAeyJ0...` (for direct eCash payments)
 
 See [Authentication](authentication.md) for details.
@@ -352,7 +352,7 @@ POST /v1/wallet/create
 
 ```json
 {
-  "api_key": "rstr_1234567890abcdef",
+  "api_key": "sk-1234567890abcdef",
   "admin_key": "radmin_fedcba0987654321",
   "balance": 10000,
   "mint": "https://mint.example.com",
@@ -366,7 +366,7 @@ Get current wallet balance.
 
 ```http
 GET /v1/wallet/balance
-Authorization: Bearer rstr_your_api_key
+Authorization: Bearer sk-...
 ```
 
 **Response:**
@@ -385,7 +385,7 @@ Add funds to existing wallet.
 
 ```http
 POST /v1/wallet/topup
-Authorization: Bearer rstr_your_api_key
+Authorization: Bearer sk-...
 ```
 
 **Request Body:**
@@ -412,7 +412,7 @@ Withdraw balance as eCash.
 
 ```http
 POST /v1/wallet/withdraw
-Authorization: Bearer rstr_your_api_key
+Authorization: Bearer sk-...
 ```
 
 **Request Body:**

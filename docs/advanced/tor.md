@@ -123,7 +123,7 @@ proxies = {
 http_client = httpx.Client(proxies=proxies)
 
 client = OpenAI(
-    api_key="rstr_your_key",
+    api_key="sk-...",
     base_url="http://roustrjfsdgfiueghsklchg.onion/v1",
     http_client=http_client
 )
@@ -159,7 +159,7 @@ const agent = new SocksProxyAgent('socks5://127.0.0.1:9050');
 
 // Configure OpenAI client
 const openai = new OpenAI({
-    apiKey: 'rstr_your_key',
+    apiKey: 'sk-...',
     baseURL: 'http://roustrjfsdgfiueghsklchg.onion/v1',
     httpAgent: agent
 });
@@ -527,5 +527,4 @@ server {
 ## Next Steps
 
 - [Nostr Discovery](nostr.md) - Announce your onion service
-- [Security Guide](../contributing/guidelines.md#security) - Security best practices
 - [Docker Setup](../getting-started/docker.md) - Container configuration
