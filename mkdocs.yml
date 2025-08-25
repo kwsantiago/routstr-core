@@ -58,8 +58,8 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.emoji:
-      emoji_index: !!python/name:materialx.emoji.twemoji
-      emoji_generator: !!python/name:materialx.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.details
   - pymdownx.inlinehilite
   - pymdownx.snippets
@@ -78,30 +78,30 @@ extra:
 nav:
   - Home: index.md
   - Getting Started:
-    - Overview: getting-started/overview.md
-    - Quick Start: getting-started/quickstart.md
-    - Docker Setup: getting-started/docker.md
-    - Configuration: getting-started/configuration.md
+      - Overview: getting-started/overview.md
+      - Quick Start: getting-started/quickstart.md
+      - Docker Setup: getting-started/docker.md
+      - Configuration: getting-started/configuration.md
   - User Guide:
-    - Introduction: user-guide/introduction.md
-    - Payment Flow: user-guide/payment-flow.md
-    - Using the API: user-guide/using-api.md
-    - Admin Dashboard: user-guide/admin-dashboard.md
-    - Models & Pricing: user-guide/models-pricing.md
+      - Introduction: user-guide/introduction.md
+      - Payment Flow: user-guide/payment-flow.md
+      - Using the API: user-guide/using-api.md
+      - Admin Dashboard: user-guide/admin-dashboard.md
+      - Models & Pricing: user-guide/models-pricing.md
   - Contributing:
-    - Setup Development: contributing/setup.md
-    - Architecture: contributing/architecture.md
-    - Code Structure: contributing/code-structure.md
-    - Testing: contributing/testing.md
-    - Database: contributing/database.md
-    - Guidelines: contributing/guidelines.md
+      - Setup Development: contributing/setup.md
+      - Architecture: contributing/architecture.md
+      - Code Structure: contributing/code-structure.md
+      - Testing: contributing/testing.md
+      - Database: contributing/database.md
+      - Guidelines: contributing/guidelines.md
   - API Reference:
-    - Overview: api/overview.md
-    - Authentication: api/authentication.md
-    - Endpoints: api/endpoints.md
-    - Errors: api/errors.md
+      - Overview: api/overview.md
+      - Authentication: api/authentication.md
+      - Endpoints: api/endpoints.md
+      - Errors: api/errors.md
   - Advanced:
-    - Tor Support: advanced/tor.md
-    - Nostr Discovery: advanced/nostr.md
-    - Custom Pricing: advanced/custom-pricing.md
-    - Migrations: advanced/migrations.md
+      - Tor Support: advanced/tor.md
+      - Nostr Discovery: advanced/nostr.md
+      - Custom Pricing: advanced/custom-pricing.md
+      - Migrations: advanced/migrations.md
