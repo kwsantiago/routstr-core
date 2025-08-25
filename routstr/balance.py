@@ -33,6 +33,18 @@ async def account_info(key: ApiKey = Depends(get_key_from_header)) -> dict:
     }
 
 
+# TODO: Implement POST /v1/wallet/create endpoint
+# This endpoint should accept:
+# - cashu_token (required): The eCash token to deposit
+# - refund_lnurl (optional): LNURL for refunds (instead of refund_address in validate_bearer_key)
+# - refund_expiry (optional): Expiry timestamp for the key (maps to key_expiry_time in validate_bearer_key)
+# The endpoint should:
+# 1. Create a new wallet/API key from the cashu_token
+# 2. Store refund_lnurl and refund_expiry in the database
+# 3. Return the API key (rstr_...) and balance
+# Note: validate_bearer_key already supports refund_address and key_expiry_time params
+
+
 @router.get("/create")
 async def create_balance(
     initial_balance_token: str, session: AsyncSession = Depends(get_session)
