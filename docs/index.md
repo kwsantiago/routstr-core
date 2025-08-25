@@ -46,19 +46,19 @@ sequenceDiagram
 
 <div class="grid cards" markdown>
 
--   :rocket: **[Quick Start](getting-started/quickstart.md)**
+- :rocket: **[Quick Start](getting-started/quickstart.md)**
 
     Get up and running with Docker in minutes
 
--   :gear: **[Configuration](getting-started/configuration.md)**
+- :gear: **[Configuration](getting-started/configuration.md)**
 
     Learn about environment variables and settings
 
--   :book: **[User Guide](user-guide/introduction.md)**
+- :book: **[User Guide](user-guide/introduction.md)**
 
     Comprehensive guide for using Routstr
 
--   :hammer: **[Contributing](contributing/setup.md)**
+- :hammer: **[Contributing](contributing/setup.md)**
 
     Help improve Routstr Core
 
