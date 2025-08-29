@@ -107,8 +107,8 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
                 elif tag[0] == "d":
                     d_tag = tag[1]
 
-        # Validate required fields
-        if not endpoint_url or not provider_name or not d_tag:
+        # Early validation only applies to legacy/other kinds, not NIP-91
+        if kind != 38421 and (not endpoint_url or not provider_name or not d_tag):
             logger.warning(
                 f"Invalid provider announcement - missing required tags: {event['id']}"
             )
