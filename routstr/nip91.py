@@ -9,7 +9,7 @@ import hashlib
 import json
 import os
 import time
-from typing import Any
+from typing import Any, cast
 
 import secp256k1
 import websockets
@@ -18,6 +18,37 @@ from .core import get_logger
 from .payment.models import MODELS
 
 logger = get_logger(__name__)
+
+
+def _schnorr_sign_event_id(
+    private_key: secp256k1.PrivateKey, event_id_hex: str
+) -> bytes:
+    """Return 64-byte Schnorr signature over the 32-byte event id."""
+    msg32 = bytes.fromhex(event_id_hex)
+
+    # Try common API variants exposed by python-secp256k1 bindings
+    method = getattr(private_key, "schnorr_sign", None)
+    if callable(method):
+        try:
+            sig = method(msg32)
+            if isinstance(sig, bytes) and len(sig) == 64:
+                return sig
+        except TypeError:
+            pass
+        try:
+            sig = method(msg32, None, True)
+            if isinstance(sig, bytes) and len(sig) == 64:
+                return sig
+        except TypeError:
+            pass
+
+    method32 = getattr(private_key, "schnorr_sign32", None)
+    if callable(method32):
+        sig = method32(msg32)
+        if isinstance(sig, bytes) and len(sig) == 64:
+            return sig
+
+    raise RuntimeError("Schnorr signing not available in secp256k1 binding")
 
 
 def nsec_to_keypair(nsec: str) -> tuple[str, str] | None:
@@ -44,7 +75,8 @@ def nsec_to_keypair(nsec: str) -> tuple[str, str] | None:
             return None
 
         private_key = secp256k1.PrivateKey(bytes.fromhex(nsec))
-        public_key = private_key.pubkey.serialize(compressed=True)[
+        pubkey_obj = cast(secp256k1.PublicKey, private_key.pubkey)
+        public_key = pubkey_obj.serialize(compressed=True)[
             1:
         ]  # Remove 0x02/0x03 prefix
 
@@ -80,9 +112,8 @@ def create_nip91_event(
     """
     # Convert hex private key to secp256k1 PrivateKey object
     private_key = secp256k1.PrivateKey(bytes.fromhex(private_key_hex))
-    public_key = private_key.pubkey.serialize(compressed=True)[
-        1:
-    ]  # Remove 0x02/0x03 prefix
+    pubkey_obj = cast(secp256k1.PublicKey, private_key.pubkey)
+    public_key = pubkey_obj.serialize(compressed=True)[1:]  # Remove 0x02/0x03 prefix
 
     # Build tags according to NIP-91
     tags = [
@@ -148,9 +179,8 @@ def create_nip91_event(
     # Calculate event ID (SHA256 hash)
     event_id = hashlib.sha256(event_json.encode("utf-8")).hexdigest()
 
-    # Sign the event ID
-    signature = private_key.ecdsa_sign(bytes.fromhex(event_id), raw=True)
-    signature_ser = private_key.ecdsa_serialize(signature)
+    # Sign the event ID using Schnorr (BIP-340)
+    sig_hex = _schnorr_sign_event_id(private_key, event_id).hex()
 
     # Create the final event
     event = {
@@ -160,7 +190,7 @@ def create_nip91_event(
         "kind": 38421,
         "tags": tags,
         "content": content,
-        "sig": signature_ser.hex(),
+        "sig": sig_hex,
     }
 
     return event
@@ -306,9 +336,8 @@ async def announce_provider() -> None:
     logger.info(f"Using Nostr pubkey: {public_key_hex}")
 
     # Get configuration from environment
-    provider_id = os.getenv(
-        "ROUTSTR_PROVIDER_ID", os.getenv("HOSTNAME", "routstr-proxy")
-    )
+    provider_id = os.getenv("ROUTSTR_PROVIDER_ID") or public_key_hex
+    logger.info(f"Using provider_id: {provider_id}")
     base_url = os.getenv("ROUTSTR_BASE_URL", "http://localhost:8000")
     onion_url = os.getenv("ROUTSTR_ONION_URL")
     mint_url = os.getenv("ROUTSTR_MINT_URL")
@@ -346,35 +375,24 @@ async def announce_provider() -> None:
             "wss://nos.lol",
         ]
 
-    # Check for existing announcements
+    # Check for existing announcements (same author already filtered in query)
     existing_events = []
     for relay_url in relay_urls:
         events = await query_nip91_events(relay_url, public_key_hex)
         existing_events.extend(events)
 
-    # Check if we need to publish (no events or outdated)
-    should_publish = True
-    if existing_events:
-        # Check if any existing event matches our current configuration
-        for event in existing_events:
-            tags_dict = {tag[0]: tag[1:] for tag in event.get("tags", [])}
-            if tags_dict.get("d", [""])[0] == provider_id:
-                # Check if configuration has changed
-                existing_urls = [
-                    tag[1] for tag in event.get("tags", []) if tag[0] == "u"
-                ]
-                existing_models: list[str] = next(
-                    (tag[1:] for tag in event.get("tags", []) if tag[0] == "models"), []
-                )
+    # Publish only if there is no existing event with the same set of 'u' tags
+    has_existing_with_same_urls = False
+    current_url_set = set(endpoint_urls)
+    for event in existing_events:
+        existing_urls = [
+            tag[1] for tag in event.get("tags", []) if tag and tag[0] == "u"
+        ]
+        if set(existing_urls) == current_url_set:
+            has_existing_with_same_urls = True
+            break
 
-                if set(existing_urls) == set(endpoint_urls) and set(
-                    existing_models
-                ) == set(supported_models):
-                    logger.info("Existing NIP-91 announcement is up to date")
-                    should_publish = False
-                    break
-
-    if should_publish:
+    if not has_existing_with_same_urls:
         # Create new NIP-91 event
         event = create_nip91_event(
             private_key_hex=private_key_hex,
@@ -398,6 +416,10 @@ async def announce_provider() -> None:
         logger.info(
             f"Published NIP-91 announcement to {success_count}/{len(relay_urls)} relays"
         )
+    else:
+        logger.info(
+            "Existing NIP-91 announcement with same URLs found; skipping publish on startup"
+        )
 
     # Re-announce periodically (every 24 hours)
     announcement_interval = int(
@@ -408,12 +430,33 @@ async def announce_provider() -> None:
         try:
             await asyncio.sleep(announcement_interval)
 
-            # Re-create and publish event
+            # Only re-publish if no existing event has the same URLs
+            existing_events = []
+            for relay_url in relay_urls:
+                events = await query_nip91_events(relay_url, public_key_hex)
+                existing_events.extend(events)
+
+            current_url_set = set(endpoint_urls)
+            has_existing_with_same_urls = False
+            for event in existing_events:
+                existing_urls = [
+                    tag[1] for tag in event.get("tags", []) if tag and tag[0] == "u"
+                ]
+                if set(existing_urls) == current_url_set:
+                    has_existing_with_same_urls = True
+                    break
+
+            if has_existing_with_same_urls:
+                logger.info(
+                    "Existing NIP-91 announcement with same URLs found; skipping periodic re-announce"
+                )
+                continue
+
             event = create_nip91_event(
                 private_key_hex=private_key_hex,
                 provider_id=provider_id,
                 endpoint_urls=endpoint_urls,
-                supported_models=[model.id for model in MODELS],  # Refresh model list
+                supported_models=[model.id for model in MODELS],
                 mint_url=mint_url,
                 version=os.getenv("ROUTSTR_VERSION", "0.1.0"),
                 metadata=metadata,
