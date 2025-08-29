@@ -47,8 +47,8 @@ async def query_nostr_relay_for_providers(
     req_message = json.dumps(["REQ", sub_id, filter_obj])
 
     try:
-        async with websockets.connect(relay_url, timeout=timeout) as websocket:
-            logger.debug("Connected to relay, searching for kind 31338 events")
+        async with websockets.connect(relay_url, open_timeout=timeout) as websocket:
+            logger.debug("Connected to relay, searching for NIP-91 events (kind 38421)")
             await websocket.send(req_message)
 
             while True:
@@ -156,12 +156,14 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
 
             # Validate NIP-91 required fields
             if not endpoint_url or not d_tag:
-                print(
+                logger.warning(
                     f"Invalid NIP-91 announcement - missing required fields: {event['id']}"
                 )
                 return None
         else:
-            print(f"Unknown event kind: {kind}")
+            logger.warning(
+                f"Unknown event kind when parsing provider announcement: {kind}"
+            )
             return None
 
         return {
@@ -257,12 +259,15 @@ async def get_providers(
     - NIP-91: https://github.com/nostr-protocol/nips/pull/1987
     """
     # Default relays for provider discovery
-    # discovery_relays = [
-    #     "wss://relay.nostr.band",
-    #     "wss://relay.damus.io",
-    #     "wss://relay.routstr.com",
-    # ]
-    discovery_relays = os.getenv("RELAYS", "").split(",")
+    # Configure relays: use NOSTR_RELAYS or defaults
+    relays_env = os.getenv("RELAYS") or ""
+    discovery_relays = [r.strip() for r in relays_env.split(",") if r.strip()]
+    if not discovery_relays:
+        discovery_relays = [
+            "wss://relay.nostr.band",
+            "wss://relay.damus.io",
+            "wss://relay.routstr.com",
+        ]
 
     all_events = []
     event_ids = set()  # To avoid duplicates
