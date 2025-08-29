@@ -20,6 +20,15 @@ from .payment.models import MODELS
 logger = get_logger(__name__)
 
 
+def get_app_version() -> str | None:
+    try:
+        from .core.main import __version__ as imported_version
+
+        return imported_version
+    except Exception:
+        return None
+
+
 def _schnorr_sign_event_id(
     private_key: secp256k1.PrivateKey, event_id_hex: str
 ) -> bytes:
@@ -92,7 +101,7 @@ def create_nip91_event(
     endpoint_urls: list[str],
     supported_models: list[str],
     mint_url: str | None = None,
-    version: str = "0.1.0",
+    version: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
@@ -131,7 +140,8 @@ def create_nip91_event(
     # Add optional tags
     if mint_url:
         tags.append(["mint", mint_url])
-    tags.append(["version", version])
+    if version:
+        tags.append(["version", version])
 
     # Add model capabilities if detailed info available
     # for model in MODELS:
@@ -225,7 +235,7 @@ async def query_nip91_events(
     req_message = json.dumps(["REQ", sub_id, filter_obj])
 
     try:
-        async with websockets.connect(relay_url, timeout=timeout) as websocket:
+        async with websockets.connect(relay_url, open_timeout=timeout) as websocket:
             logger.info(f"Querying {relay_url} for existing NIP-91 events")
             await websocket.send(req_message)
 
@@ -276,7 +286,7 @@ async def publish_to_relay(
         True if successfully published, False otherwise
     """
     try:
-        async with websockets.connect(relay_url, timeout=timeout) as websocket:
+        async with websockets.connect(relay_url, open_timeout=timeout) as websocket:
             # Send EVENT message
             event_message = json.dumps(["EVENT", event])
             await websocket.send(event_message)
@@ -286,7 +296,7 @@ async def publish_to_relay(
             try:
                 response = await asyncio.wait_for(websocket.recv(), timeout=50)
                 data = json.loads(response)
-                print(f"Response: {data}")
+                logger.debug(f"Relay response: {data}")
 
                 if data[0] == "OK" and data[1] == event["id"]:
                     if data[2]:  # True means accepted
@@ -320,10 +330,10 @@ async def announce_provider() -> None:
     Background task to announce this Routstr provider to Nostr relays.
     Checks for existing announcements and creates new ones if needed.
     """
-    # Check for NSEC in environment
+    # Check for NSEC in environment (use NOSTR_NSEC only)
     nsec = os.getenv("NSEC")
     if not nsec:
-        logger.info("NSEC not found in environment, skipping NIP-91 announcement")
+        logger.info("Nostr private key not found (NSEC), skipping NIP-91 announcement")
         return
 
     # Convert NSEC to keypair
@@ -336,18 +346,27 @@ async def announce_provider() -> None:
     logger.info(f"Using Nostr pubkey: {public_key_hex}")
 
     # Get configuration from environment
-    provider_id = os.getenv("ROUTSTR_PROVIDER_ID") or public_key_hex
+    # Determine provider_id without ROUTSTR_* vars: prefer hostname, fallback to pubkey
+    try:
+        import socket
+
+        provider_id = socket.gethostname() or public_key_hex
+    except Exception:
+        provider_id = public_key_hex
     logger.info(f"Using provider_id: {provider_id}")
-    base_url = os.getenv("ROUTSTR_BASE_URL", "http://localhost:8000")
-    onion_url = os.getenv("ROUTSTR_ONION_URL")
-    mint_url = os.getenv("ROUTSTR_MINT_URL")
-    provider_name = os.getenv("ROUTSTR_PROVIDER_NAME", "Routstr Proxy")
-    provider_about = os.getenv(
-        "ROUTSTR_PROVIDER_ABOUT", "Privacy-preserving AI proxy via Nostr"
-    )
+    # Core settings only (no ROUTSTR_* vars)
+    base_url = os.getenv("HTTP_URL", "http://localhost:8000")
+    onion_url = os.getenv("ONION_URL")
+    provider_name = os.getenv("NAME", "Routstr Proxy")
+    provider_about = os.getenv("DESCRIPTION", "Privacy-preserving AI proxy via Nostr")
+    # Mint URL optional: first CASHU_MINTS entry if available
+    cashu_mints = [
+        m.strip() for m in os.getenv("CASHU_MINTS", "").split(",") if m.strip()
+    ]
+    mint_url = cashu_mints[0] if cashu_mints else None
 
     # Build endpoint URLs
-    endpoint_urls = [base_url]
+    endpoint_urls: list[str] = [base_url]
     if onion_url:
         endpoint_urls.append(onion_url)
 
@@ -363,12 +382,11 @@ async def announce_provider() -> None:
         "about": provider_about,
     }
 
-    # Get relay URLs from environment or use defaults
-    relay_urls_env = os.getenv("RELAYS")
-    print(f"RELAYS: {relay_urls_env}")
-    if relay_urls_env:
-        relay_urls = [url.strip() for url in relay_urls_env.split(",")]
-    else:
+    # Get relay URLs from environment or use defaults (NOSTR_RELAYS only)
+    relay_urls_env = os.getenv("NOSTR_RELAYS") or ""
+    logger.debug(f"Configured relays: {relay_urls_env}")
+    relay_urls = [url.strip() for url in relay_urls_env.split(",") if url.strip()]
+    if not relay_urls:
         relay_urls = [
             "wss://relay.nostr.band",
             "wss://relay.damus.io",
@@ -394,18 +412,20 @@ async def announce_provider() -> None:
 
     if not has_existing_with_same_urls:
         # Create new NIP-91 event
+        # Import version inside the function to avoid circular imports
+        version_str = get_app_version()
+
         event = create_nip91_event(
             private_key_hex=private_key_hex,
             provider_id=provider_id,
             endpoint_urls=endpoint_urls,
             supported_models=supported_models,
             mint_url=mint_url,
-            version=os.getenv("ROUTSTR_VERSION", "0.1.0"),
+            version=version_str,
             metadata=metadata,
         )
 
         logger.info(f"Created NIP-91 announcement event: {event['id']}")
-        print(f"Created NIP-91 announcement event: {event}")
 
         # Publish to all relays
         success_count = 0
@@ -452,13 +472,15 @@ async def announce_provider() -> None:
                 )
                 continue
 
+            version_str = get_app_version()
+
             event = create_nip91_event(
                 private_key_hex=private_key_hex,
                 provider_id=provider_id,
                 endpoint_urls=endpoint_urls,
                 supported_models=[model.id for model in MODELS],
                 mint_url=mint_url,
-                version=os.getenv("ROUTSTR_VERSION", "0.1.0"),
+                version=version_str,
                 metadata=metadata,
             )
 
