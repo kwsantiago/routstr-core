@@ -346,13 +346,13 @@ async def announce_provider() -> None:
     logger.info(f"Using Nostr pubkey: {public_key_hex}")
 
     # Get configuration from environment
-    # Determine provider_id without ROUTSTR_* vars: prefer hostname, fallback to pubkey
+    # Determine provider_id without ROUTSTR_* vars: prefer hostname, fallback to truncated pubkey
     try:
         import socket
 
-        provider_id = socket.gethostname() or public_key_hex
+        provider_id = socket.gethostname() or public_key_hex[:12]
     except Exception:
-        provider_id = public_key_hex
+        provider_id = public_key_hex[:12]
     logger.info(f"Using provider_id: {provider_id}")
     # Core settings only (no ROUTSTR_* vars)
     base_url = os.getenv("HTTP_URL", "http://localhost:8000")
