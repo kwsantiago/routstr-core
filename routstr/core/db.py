@@ -23,6 +23,9 @@ class ApiKey(SQLModel, table=True):  # type: ignore
 
     hashed_key: str = Field(primary_key=True)
     balance: int = Field(default=0, description="Balance in millisatoshis (msats)")
+    reserved_balance: int = Field(
+        default=0, description="Reserved balance in millisatoshis (msats)"
+    )
     refund_address: str | None = Field(
         default=None,
         description="Lightning address to refund remaining balance after key expires",
@@ -43,6 +46,10 @@ class ApiKey(SQLModel, table=True):  # type: ignore
         default=None,
         description="Currency of the cashu-token",
     )
+
+    @property
+    def total_balance(self) -> int:
+        return self.balance - self.reserved_balance
 
 
 async def balances_for_mint_and_unit(

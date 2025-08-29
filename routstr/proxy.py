@@ -19,7 +19,7 @@ from .payment.helpers import (
     UPSTREAM_BASE_URL,
     check_token_balance,
     create_error_response,
-    get_cost_per_request,
+    get_max_cost_for_model,
     prepare_upstream_headers,
 )
 from .payment.x_cashu import x_cashu_handler
@@ -501,9 +501,8 @@ async def proxy(
                 media_type="application/json",
             )
 
-    max_cost_for_model = get_cost_per_request(
-        model=request_body_dict.get("model", None)
-    )
+    model = request_body_dict.get("model", "unknown")
+    max_cost_for_model = get_max_cost_for_model(model=model)
     check_token_balance(headers, request_body_dict, max_cost_for_model)
 
     # Handle authentication
@@ -515,7 +514,7 @@ async def proxy(
                 "token_preview": x_cashu[:20] + "..." if len(x_cashu) > 20 else x_cashu,
             },
         )
-        return await x_cashu_handler(request, x_cashu, path)
+        return await x_cashu_handler(request, x_cashu, path, max_cost_for_model)
 
     elif auth := headers.get("authorization", None):
         logger.debug(
@@ -540,11 +539,10 @@ async def proxy(
             )
 
         logger.debug("Processing unauthenticated GET request", extra={"path": path})
-        # Prepare headers for upstream
+        # TODO: why is this needed? can we remove it?
         headers = prepare_upstream_headers(dict(request.headers))
         return await forward_get_to_upstream(request, path, headers)
 
-    cost_per_request = 0
     # Only pay for request if we have request body data (for completions endpoints)
     if request_body_dict:
         logger.info(
@@ -558,7 +556,7 @@ async def proxy(
         )
 
         try:
-            await pay_for_request(key, session, request_body_dict)
+            await pay_for_request(key, max_cost_for_model, session)
             logger.info(
                 "Payment processed successfully",
                 extra={
@@ -589,7 +587,7 @@ async def proxy(
     )
 
     if response.status_code != 200:
-        await revert_pay_for_request(key, session, cost_per_request)
+        await revert_pay_for_request(key, session, max_cost_for_model)
         logger.warning(
             "Upstream request failed, revert payment",
             extra={
@@ -597,7 +595,21 @@ async def proxy(
                 "path": path,
                 "key_hash": key.hashed_key[:8] + "...",
                 "key_balance": key.balance,
+                "max_cost_for_model": max_cost_for_model,
+                "upstream_headers": response.headers
+                if hasattr(response, "headers")
+                else None,
+                "upstream_response": response.body
+                if hasattr(response, "body")
+                else None,
             },
+        )
+        request_id = (
+            request.state.request_id if hasattr(request.state, "request_id") else None
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream request failed, please contact support with request id: {request_id}",
         )
 
     return response

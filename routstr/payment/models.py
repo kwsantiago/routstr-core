@@ -87,7 +87,7 @@ def fetch_openrouter_models(source_filter: str | None = None) -> list[dict]:
 
             return models_data
     except Exception as e:
-        print(f"Error fetching models from OpenRouter API: {e}")
+        logger.error(f"Error fetching models from OpenRouter API: {e}")
         return []
 
 
@@ -110,7 +110,7 @@ def load_models() -> list[Model]:
                 data = json.load(f)
             return [Model(**model) for model in data.get("models", [])]
         except Exception as e:
-            print(f"Error loading models from {models_path}: {e}")
+            logger.error(f"Error loading models from {models_path}: {e}")
             # Fall through to auto-generation
 
     # Auto-generate models from OpenRouter API
@@ -168,7 +168,7 @@ async def update_sats_pricing() -> None:
         except asyncio.CancelledError:
             break
         except Exception as e:
-            print("Error updating sats pricing: ", e)
+            logger.error(f"Error updating sats pricing: {e}")
         try:
             await asyncio.sleep(10)
         except asyncio.CancelledError:

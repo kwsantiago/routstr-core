@@ -1,4 +1,5 @@
 import asyncio
+import math
 import os
 from typing import TypedDict
 
@@ -19,13 +20,7 @@ RECEIVE_LN_ADDRESS = os.environ.get("RECEIVE_LN_ADDRESS", "")
 
 
 async def get_balance(unit: str) -> int:
-    wallet = await Wallet.with_db(
-        PRIMARY_MINT_URL,
-        db=".wallet",
-        load_all_keysets=True,
-        unit=unit,
-    )
-    await wallet.load_proofs()
+    wallet = await get_wallet(PRIMARY_MINT_URL, unit)
     return wallet.available_balance.amount
 
 
@@ -36,13 +31,8 @@ async def recieve_token(
     if len(token_obj.keysets) > 1:
         raise ValueError("Multiple keysets per token currently not supported")
 
-    wallet = await Wallet.with_db(
-        token_obj.mint,
-        db=".wallet",
-        load_all_keysets=True,
-        unit=token_obj.unit,
-    )
-    await wallet.load_mint(token_obj.keysets[0])
+    wallet = await get_wallet(token_obj.mint, token_obj.unit, load=False)
+    wallet.keyset_id = token_obj.keysets[0]
 
     if token_obj.mint not in TRUSTED_MINTS:
         return await swap_to_primary_mint(token_obj, wallet)
@@ -54,14 +44,8 @@ async def recieve_token(
 
 async def send(amount: int, unit: str, mint_url: str | None = None) -> tuple[int, str]:
     """Internal send function - returns amount and serialized token"""
-    wallet: Wallet = await Wallet.with_db(
-        mint_url or PRIMARY_MINT_URL, db=".wallet", load_all_keysets=True, unit=unit
-    )
-    await wallet.load_mint()
-    await wallet.load_proofs()
-    proofs = await get_proofs_per_mint_and_unit(
-        wallet, mint_url or PRIMARY_MINT_URL, unit
-    )
+    wallet: Wallet = await get_wallet(mint_url or PRIMARY_MINT_URL, unit)
+    proofs = get_proofs_per_mint_and_unit(wallet, mint_url or PRIMARY_MINT_URL, unit)
 
     send_proofs, _ = await wallet.select_to_send(
         proofs, amount, set_reserved=True, include_fees=False
@@ -88,20 +72,23 @@ async def swap_to_primary_mint(
             "unit": token_obj.unit,
         },
     )
+    # Ensure amount is an integer
+    if not isinstance(token_obj.amount, int):
+        token_amount = int(token_obj.amount)
+    else:
+        token_amount = token_obj.amount
+
     if token_obj.unit == "sat":
-        amount_msat = token_obj.amount * 1000
+        amount_msat = token_amount * 1000
     elif token_obj.unit == "msat":
-        amount_msat = token_obj.amount
+        amount_msat = token_amount
     else:
         raise ValueError("Invalid unit")
-    estimated_fee_sat = int(max(amount_msat // 1000 * 0.01, 2))
+    estimated_fee_sat = math.ceil(max(amount_msat // 1000 * 0.01, 2))
     amount_msat_after_fee = amount_msat - estimated_fee_sat * 1000
-    primary_wallet = await Wallet.with_db(
-        PRIMARY_MINT_URL, db=".wallet", load_all_keysets=True, unit="sat"
-    )
-    await primary_wallet.load_mint()
+    primary_wallet = await get_wallet(PRIMARY_MINT_URL, "sat")
 
-    minted_amount = amount_msat_after_fee // 1000
+    minted_amount = int(amount_msat_after_fee // 1000)
     mint_quote = await primary_wallet.request_mint(minted_amount)
 
     melt_quote = await token_wallet.melt_quote(mint_quote.request)
@@ -113,7 +100,7 @@ async def swap_to_primary_mint(
     )
     _ = await primary_wallet.mint(minted_amount, quote_id=mint_quote.quote)
 
-    return minted_amount, "sat", PRIMARY_MINT_URL
+    return int(minted_amount), "sat", PRIMARY_MINT_URL
 
 
 async def credit_balance(
@@ -162,16 +149,24 @@ async def credit_balance(
         raise
 
 
-async def get_wallet(mint_url: str, unit: str = "sat") -> Wallet:
-    wallet = await Wallet.with_db(
-        mint_url, db=".wallet", load_all_keysets=True, unit=unit
-    )
-    await wallet.load_mint()
-    await wallet.load_proofs(reload=True)
-    return wallet
+_wallets: dict[str, Wallet] = {}
 
 
-async def get_proofs_per_mint_and_unit(
+async def get_wallet(mint_url: str, unit: str = "sat", load: bool = True) -> Wallet:
+    global _wallets
+    id = f"{mint_url}_{unit}"
+    if id not in _wallets:
+        _wallets[id] = await Wallet.with_db(
+            mint_url, db=".wallet", load_all_keysets=True, unit=unit
+        )
+
+    if load:
+        await _wallets[id].load_mint()
+        await _wallets[id].load_proofs(reload=True)
+    return _wallets[id]
+
+
+def get_proofs_per_mint_and_unit(
     wallet: Wallet, mint_url: str, unit: str, not_reserved: bool = False
 ) -> list[Proof]:
     valid_keyset_ids = [
@@ -188,14 +183,16 @@ async def get_proofs_per_mint_and_unit(
 async def slow_filter_spend_proofs(proofs: list[Proof], wallet: Wallet) -> list[Proof]:
     if not proofs:
         return []
-    proof_states = await wallet.check_proof_state(proofs)
     _proofs = []
     _spent_proofs = []
-    for proof, state in zip(proofs, proof_states.states):
-        if str(state.state) != "spent":
-            _proofs.append(proof)
-        else:
-            _spent_proofs.append(proof)
+    for i in range(0, len(proofs), 1000):
+        pb = proofs[i : i + 1000]
+        proof_states = await wallet.check_proof_state(pb)
+        for proof, state in zip(pb, proof_states.states):
+            if str(state.state) != "spent":
+                _proofs.append(proof)
+            else:
+                _spent_proofs.append(proof)
     await wallet.set_reserved_for_send(_spent_proofs, reserved=True)
     return _proofs
 
@@ -229,7 +226,7 @@ async def fetch_all_balances(
     ) -> BalanceDetail:
         try:
             wallet = await get_wallet(mint_url, unit)
-            proofs = await get_proofs_per_mint_and_unit(
+            proofs = get_proofs_per_mint_and_unit(
                 wallet, mint_url, unit, not_reserved=True
             )
             proofs = await slow_filter_spend_proofs(proofs, wallet)
@@ -306,13 +303,13 @@ async def periodic_payout() -> None:
         logger.error("RECEIVE_LN_ADDRESS is not set, skipping payout")
         return
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(60 * 5)
         try:
             async with db.create_session() as session:
                 for mint_url in TRUSTED_MINTS:
                     for unit in ["sat", "msat"]:
                         wallet = await get_wallet(mint_url, unit)
-                        proofs = await get_proofs_per_mint_and_unit(
+                        proofs = get_proofs_per_mint_and_unit(
                             wallet, mint_url, unit, not_reserved=True
                         )
                         proofs = await slow_filter_spend_proofs(proofs, wallet)
@@ -323,32 +320,21 @@ async def periodic_payout() -> None:
                             user_balance = user_balance // 1000
                         proofs_balance = sum(proof.amount for proof in proofs)
                         available_balance = proofs_balance - user_balance
-                        print(f"Balance: {proofs_balance} {unit}")
-                        print(f"User balance: {user_balance} {unit}")
-                        print(f"Available balance: {available_balance} {unit}")
                         min_amount = 210 if unit == "sat" else 210000
-                        if proofs_balance > min_amount:
+                        if available_balance > min_amount:
                             amount_received = await raw_send_to_lnurl(
                                 wallet, proofs, RECEIVE_LN_ADDRESS, unit
                             )
-                            print(f"Amount received: {amount_received}")
                             logger.info(
                                 "Payout sent successfully",
                                 extra={
                                     "mint_url": mint_url,
                                     "unit": unit,
-                                    "balance": proofs_balance,
+                                    "balance": available_balance,
+                                    "amount_received": amount_received,
                                 },
                             )
-                        else:
-                            logger.info(
-                                "Not enough balance to send payout",
-                                extra={
-                                    "mint_url": mint_url,
-                                    "unit": unit,
-                                    "balance": proofs_balance,
-                                },
-                            )
+
                         await asyncio.sleep(5)
         except Exception as e:
             logger.error(

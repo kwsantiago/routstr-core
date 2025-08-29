@@ -19,30 +19,6 @@ if not UPSTREAM_BASE_URL:
     raise ValueError("Please set the UPSTREAM_BASE_URL environment variable")
 
 
-def get_cost_per_request(model: str | None = None) -> int:
-    """Get the cost per request for a given model."""
-    logger.debug(
-        "Calculating cost per request",
-        extra={
-            "model": model,
-            "model_based_pricing": MODEL_BASED_PRICING,
-            "has_models": bool(MODELS),
-        },
-    )
-
-    if MODEL_BASED_PRICING and MODELS and model:
-        cost = get_max_cost_for_model(model=model)
-        logger.debug(
-            "Using model-based cost", extra={"model": model, "cost_msats": cost}
-        )
-        return cost
-
-    logger.debug(
-        "Using default cost per request", extra={"cost_msats": COST_PER_REQUEST}
-    )
-    return COST_PER_REQUEST
-
-
 def check_token_balance(headers: dict, body: dict, max_cost_for_model: int) -> None:
     if x_cashu := headers.get("x-cashu", None):
         cashu_token = x_cashu
@@ -111,7 +87,7 @@ def check_token_balance(headers: dict, body: dict, max_cost_for_model: int) -> N
         )
 
 
-def get_max_cost_for_model(model: str) -> int:
+def get_max_cost_for_model(model: str, tolerance_percentage: int = 1) -> int:
     """Get the maximum cost for a specific model."""
     logger.debug(
         "Getting max cost for model",
@@ -142,7 +118,7 @@ def get_max_cost_for_model(model: str) -> int:
 
     for m in MODELS:
         if m.id == model:
-            max_cost = m.sats_pricing.max_cost * 1000  # type: ignore
+            max_cost = m.sats_pricing.max_cost * 1000 * (1 - tolerance_percentage / 100)  # type: ignore
             logger.debug(
                 "Found model-specific max cost",
                 extra={"model": model, "max_cost_msats": max_cost},
