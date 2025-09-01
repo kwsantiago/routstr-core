@@ -259,7 +259,7 @@ async def get_providers(
     - NIP-91: https://github.com/nostr-protocol/nips/pull/1987
     """
     # Default relays for provider discovery
-    # Configure relays: use NOSTR_RELAYS or defaults
+    # Configure relays: use RELAYS or defaults
     relays_env = os.getenv("RELAYS") or ""
     discovery_relays = [r.strip() for r in relays_env.split(",") if r.strip()]
     if not discovery_relays:
