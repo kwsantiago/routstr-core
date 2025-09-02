@@ -206,9 +206,60 @@ def create_nip91_event(
     return event
 
 
+def _get_tag_values(event: dict[str, Any], key: str) -> list[str]:
+    tags = event.get("tags", [])
+    values: list[str] = []
+    for tag in tags:
+        if isinstance(tag, list) and tag and tag[0] == key and len(tag) >= 2:
+            values.append(tag[1])
+    return values
+
+
+def _get_single_tag_value(event: dict[str, Any], key: str) -> str | None:
+    values = _get_tag_values(event, key)
+    return values[0] if values else None
+
+
+def _parse_content_json(content: str) -> dict[str, Any]:
+    if not content:
+        return {}
+    try:
+        parsed = json.loads(content)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+def events_semantically_equal(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    if a.get("kind") != b.get("kind"):
+        return False
+
+    if _get_single_tag_value(a, "d") != _get_single_tag_value(b, "d"):
+        return False
+
+    urls_a = set(_get_tag_values(a, "u"))
+    urls_b = set(_get_tag_values(b, "u"))
+    if urls_a != urls_b:
+        return False
+
+    if _get_single_tag_value(a, "mint") != _get_single_tag_value(b, "mint"):
+        return False
+
+    if _get_single_tag_value(a, "version") != _get_single_tag_value(b, "version"):
+        return False
+
+    content_a = _parse_content_json(cast(str, a.get("content", "")))
+    content_b = _parse_content_json(cast(str, b.get("content", "")))
+    if content_a != content_b:
+        return False
+
+    return True
+
+
 async def query_nip91_events(
     relay_url: str,
     pubkey: str,
+    provider_id: str | None = None,
     timeout: int = 30,
 ) -> list[dict[str, Any]]:
     """
@@ -225,18 +276,20 @@ async def query_nip91_events(
     events = []
 
     # Build filter for NIP-91 events from specific pubkey
-    filter_obj = {
+    filter_obj: dict[str, Any] = {
         "kinds": [38421],
         "authors": [pubkey],
         "limit": 10,
     }
+    if provider_id:
+        filter_obj["#d"] = [provider_id]
 
     sub_id = f"nip91_{int(time.time())}"
     req_message = json.dumps(["REQ", sub_id, filter_obj])
 
     try:
         async with websockets.connect(relay_url, open_timeout=timeout) as websocket:
-            logger.info(f"Querying {relay_url} for existing NIP-91 events")
+            logger.debug(f"Querying {relay_url} for existing NIP-91 events")
             await websocket.send(req_message)
 
             while True:
@@ -246,7 +299,7 @@ async def query_nip91_events(
 
                     if data[0] == "EVENT" and data[1] == sub_id:
                         event = data[2]
-                        logger.info(f"Found existing NIP-91 event: {event['id']}")
+                        logger.debug(f"Found existing NIP-91 event: {event['id']}")
                         events.append(event)
                     elif data[0] == "EOSE" and data[1] == sub_id:
                         logger.debug("Received EOSE message")
@@ -258,7 +311,7 @@ async def query_nip91_events(
                     logger.debug("Timeout waiting for relay response")
                     break
                 except json.JSONDecodeError:
-                    logger.error("Failed to decode relay message as JSON")
+                    logger.debug("Failed to decode relay message as JSON")
                     continue
 
             await websocket.send(json.dumps(["CLOSE", sub_id]))
@@ -267,6 +320,35 @@ async def query_nip91_events(
         logger.error(f"Failed to query relay {relay_url}: {e}")
 
     return events
+
+
+async def _determine_provider_id(public_key_hex: str, relay_urls: list[str]) -> str:
+    explicit = os.getenv("PROVIDER_ID") or os.getenv("NIP91_PROVIDER_ID")
+    if explicit:
+        logger.info(f"Using configured provider_id from env: {explicit}")
+        return explicit
+
+    latest_event: dict[str, Any] | None = None
+    latest_ts = -1
+    for relay_url in relay_urls:
+        try:
+            events = await query_nip91_events(relay_url, public_key_hex, None)
+            for ev in events:
+                ts = int(ev.get("created_at", 0))
+                if ts > latest_ts:
+                    latest_event = ev
+                    latest_ts = ts
+        except Exception:
+            continue
+
+    existing_d = _get_single_tag_value(latest_event, "d") if latest_event else None
+    if existing_d:
+        logger.info(f"Reusing existing provider_id from relay: {existing_d}")
+        return existing_d
+
+    fallback = public_key_hex[:12]
+    logger.info(f"No existing provider_id found; using fallback: {fallback}")
+    return fallback
 
 
 async def publish_to_relay(
@@ -290,7 +372,7 @@ async def publish_to_relay(
             # Send EVENT message
             event_message = json.dumps(["EVENT", event])
             await websocket.send(event_message)
-            logger.info(f"Sent NIP-91 event {event['id']} to {relay_url}")
+            logger.debug(f"Sent NIP-91 event {event['id']} to {relay_url}")
 
             # Wait for OK response
             try:
@@ -300,20 +382,16 @@ async def publish_to_relay(
 
                 if data[0] == "OK" and data[1] == event["id"]:
                     if data[2]:  # True means accepted
-                        logger.info(
-                            f"Event accepted by {relay_url}: {data[3] if len(data) > 3 else ''}"
-                        )
+                        logger.info(f"Event accepted by {relay_url}")
                         return True
                     else:
-                        logger.warning(
-                            f"Event rejected by {relay_url}: {data[3] if len(data) > 3 else ''}"
-                        )
+                        logger.warning(f"Event rejected by {relay_url}")
                         return False
                 elif data[0] == "NOTICE":
                     logger.warning(f"Relay notice from {relay_url}: {data[1]}")
                     return False
                 else:
-                    logger.warning(f"Unexpected response from {relay_url}: {data}")
+                    logger.debug(f"Unexpected response from {relay_url}: {data}")
                     return False
 
             except asyncio.TimeoutError:
@@ -330,7 +408,7 @@ async def announce_provider() -> None:
     Background task to announce this Routstr provider to Nostr relays.
     Checks for existing announcements and creates new ones if needed.
     """
-    # Check for NSEC in environment (use NOSTR_NSEC only)
+    # Check for NSEC in environment (use NSEC only)
     nsec = os.getenv("NSEC")
     if not nsec:
         logger.info("Nostr private key not found (NSEC), skipping NIP-91 announcement")
@@ -345,15 +423,21 @@ async def announce_provider() -> None:
     private_key_hex, public_key_hex = keypair
     logger.info(f"Using Nostr pubkey: {public_key_hex}")
 
-    # Get configuration from environment
-    # Determine provider_id without ROUTSTR_* vars: prefer hostname, fallback to truncated pubkey
-    try:
-        import socket
+    # Configure relays first (RELAYS only)
+    relay_urls_env = os.getenv("RELAYS") or ""
+    logger.debug(f"Configured relays: {relay_urls_env}")
+    relay_urls = [url.strip() for url in relay_urls_env.split(",") if url.strip()]
+    if not relay_urls:
+        relay_urls = [
+            "wss://relay.nostr.band",
+            "wss://relay.damus.io",
+            "wss://nos.lol",
+        ]
 
-        provider_id = socket.gethostname() or public_key_hex[:12]
-    except Exception:
-        provider_id = public_key_hex[:12]
+    # Determine a stable provider_id
+    provider_id = await _determine_provider_id(public_key_hex, relay_urls)
     logger.info(f"Using provider_id: {provider_id}")
+
     # Core settings only (no ROUTSTR_* vars)
     base_url = os.getenv("HTTP_URL", "http://localhost:8000")
     onion_url = os.getenv("ONION_URL")
@@ -382,63 +466,44 @@ async def announce_provider() -> None:
         "about": provider_about,
     }
 
-    # Get relay URLs from environment or use defaults (NOSTR_RELAYS only)
-    relay_urls_env = os.getenv("NOSTR_RELAYS") or ""
-    logger.debug(f"Configured relays: {relay_urls_env}")
-    relay_urls = [url.strip() for url in relay_urls_env.split(",") if url.strip()]
-    if not relay_urls:
-        relay_urls = [
-            "wss://relay.nostr.band",
-            "wss://relay.damus.io",
-            "wss://nos.lol",
-        ]
+    # Create the candidate event that we would publish
+    version_str = get_app_version()
+    candidate_event = create_nip91_event(
+        private_key_hex=private_key_hex,
+        provider_id=provider_id,
+        endpoint_urls=endpoint_urls,
+        supported_models=supported_models,
+        mint_url=mint_url,
+        version=version_str,
+        metadata=metadata,
+    )
 
-    # Check for existing announcements (same author already filtered in query)
-    existing_events = []
+    # Fetch existing events for this provider_id
+    existing_events: list[dict[str, Any]] = []
     for relay_url in relay_urls:
-        events = await query_nip91_events(relay_url, public_key_hex)
+        events = await query_nip91_events(relay_url, public_key_hex, provider_id)
         existing_events.extend(events)
 
-    # Publish only if there is no existing event with the same set of 'u' tags
-    has_existing_with_same_urls = False
-    current_url_set = set(endpoint_urls)
-    for event in existing_events:
-        existing_urls = [
-            tag[1] for tag in event.get("tags", []) if tag and tag[0] == "u"
-        ]
-        if set(existing_urls) == current_url_set:
-            has_existing_with_same_urls = True
-            break
+    # Decide whether to publish: publish if none exist or any differ from candidate
+    found_any = len(existing_events) > 0
+    all_match = found_any and all(
+        events_semantically_equal(ev, candidate_event) for ev in existing_events
+    )
 
-    if not has_existing_with_same_urls:
-        # Create new NIP-91 event
-        # Import version inside the function to avoid circular imports
-        version_str = get_app_version()
-
-        event = create_nip91_event(
-            private_key_hex=private_key_hex,
-            provider_id=provider_id,
-            endpoint_urls=endpoint_urls,
-            supported_models=supported_models,
-            mint_url=mint_url,
-            version=version_str,
-            metadata=metadata,
+    if not all_match:
+        logger.debug(
+            "No matching NIP-91 announcement found or differences detected; publishing update"
         )
-
-        logger.info(f"Created NIP-91 announcement event: {event['id']}")
-
-        # Publish to all relays
         success_count = 0
         for relay_url in relay_urls:
-            if await publish_to_relay(relay_url, event):
+            if await publish_to_relay(relay_url, candidate_event):
                 success_count += 1
-
         logger.info(
             f"Published NIP-91 announcement to {success_count}/{len(relay_urls)} relays"
         )
     else:
-        logger.info(
-            "Existing NIP-91 announcement with same URLs found; skipping publish on startup"
+        logger.debug(
+            "Matching NIP-91 announcement already present; skipping publish on startup"
         )
 
     # Re-announce periodically (every 24 hours)
@@ -450,31 +515,9 @@ async def announce_provider() -> None:
         try:
             await asyncio.sleep(announcement_interval)
 
-            # Only re-publish if no existing event has the same URLs
-            existing_events = []
-            for relay_url in relay_urls:
-                events = await query_nip91_events(relay_url, public_key_hex)
-                existing_events.extend(events)
-
-            current_url_set = set(endpoint_urls)
-            has_existing_with_same_urls = False
-            for event in existing_events:
-                existing_urls = [
-                    tag[1] for tag in event.get("tags", []) if tag and tag[0] == "u"
-                ]
-                if set(existing_urls) == current_url_set:
-                    has_existing_with_same_urls = True
-                    break
-
-            if has_existing_with_same_urls:
-                logger.info(
-                    "Existing NIP-91 announcement with same URLs found; skipping periodic re-announce"
-                )
-                continue
-
+            # Build fresh candidate event for comparison
             version_str = get_app_version()
-
-            event = create_nip91_event(
+            candidate_event = create_nip91_event(
                 private_key_hex=private_key_hex,
                 provider_id=provider_id,
                 endpoint_urls=endpoint_urls,
@@ -484,10 +527,30 @@ async def announce_provider() -> None:
                 metadata=metadata,
             )
 
-            logger.info(f"Re-announcing provider (periodic update): {event['id']}")
-
+            # Fetch existing events for this provider_id
+            existing_events = []
             for relay_url in relay_urls:
-                await publish_to_relay(relay_url, event)
+                events = await query_nip91_events(
+                    relay_url, public_key_hex, provider_id
+                )
+                existing_events.extend(events)
+
+            found_any = len(existing_events) > 0
+            all_match = found_any and all(
+                events_semantically_equal(ev, candidate_event) for ev in existing_events
+            )
+
+            if all_match:
+                logger.debug(
+                    "Matching NIP-91 announcement already present; skipping periodic re-announce"
+                )
+                continue
+
+            logger.debug(
+                f"Re-announcing provider due to differences or absence: {candidate_event['id']}"
+            )
+            for relay_url in relay_urls:
+                await publish_to_relay(relay_url, candidate_event)
 
         except asyncio.CancelledError:
             logger.info("NIP-91 announcement task cancelled")
