@@ -322,6 +322,44 @@ async def query_nip91_events(
     return events
 
 
+def discover_onion_url_from_tor(base_dir: str = "/var/lib/tor") -> str | None:
+    """Discover onion URL by reading Tor hidden service hostname files.
+
+    Tries common paths first, then scans recursively for any 'hostname' file.
+    Returns an http URL like 'http://<host>.onion' if found.
+    """
+    common_candidates = [
+        os.path.join(base_dir, "hs", "router", "hostname"),
+        os.path.join(base_dir, "hs", "ROUTER", "hostname"),
+        os.path.join(base_dir, "hidden_service", "hostname"),
+    ]
+
+    for candidate in common_candidates:
+        try:
+            with open(candidate, "r", encoding="utf-8") as f:
+                host = f.readline().strip()
+            if host and host.endswith(".onion"):
+                return f"http://{host}"
+        except Exception:
+            pass
+
+    try:
+        for root, _dirs, files in os.walk(base_dir):
+            if "hostname" in files:
+                path = os.path.join(root, "hostname")
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        host = f.readline().strip()
+                    if host and host.endswith(".onion"):
+                        return f"http://{host}"
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    return None
+
+
 async def _determine_provider_id(public_key_hex: str, relay_urls: list[str]) -> str:
     explicit = os.getenv("PROVIDER_ID") or os.getenv("NIP91_PROVIDER_ID")
     if explicit:
@@ -439,8 +477,13 @@ async def announce_provider() -> None:
     logger.info(f"Using provider_id: {provider_id}")
 
     # Core settings only (no ROUTSTR_* vars)
-    base_url = os.getenv("HTTP_URL", "http://localhost:8000")
+    base_url = os.getenv("HTTP_URL")
     onion_url = os.getenv("ONION_URL")
+    if not onion_url:
+        discovered = discover_onion_url_from_tor()
+        if discovered:
+            onion_url = discovered
+            logger.info(f"Discovered onion URL via Tor volume: {onion_url}")
     provider_name = os.getenv("NAME", "Routstr Proxy")
     provider_about = os.getenv("DESCRIPTION", "Privacy-preserving AI proxy via Nostr")
     # Mint URL optional: first CASHU_MINTS entry if available
@@ -449,10 +492,18 @@ async def announce_provider() -> None:
     ]
     mint_url = cashu_mints[0] if cashu_mints else None
 
-    # Build endpoint URLs
-    endpoint_urls: list[str] = [base_url]
-    if onion_url:
-        endpoint_urls.append(onion_url)
+    # Build endpoint URLs (skip defaults like localhost)
+    endpoint_urls: list[str] = []
+    if base_url and base_url.strip() and base_url.strip() != "http://localhost:8000":
+        endpoint_urls.append(base_url.strip())
+    if onion_url and onion_url.strip():
+        endpoint_urls.append(onion_url.strip())
+
+    if not endpoint_urls:
+        logger.warning(
+            "No valid endpoints configured (HTTP_URL/ONION_URL). Skipping NIP-91 publish."
+        )
+        return
 
     # Get supported models
     supported_models = [model.id for model in MODELS]
