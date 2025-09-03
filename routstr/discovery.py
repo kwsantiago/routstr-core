@@ -224,6 +224,25 @@ async def _discover_providers(pubkey: str | None = None) -> list[dict[str, Any]]
             continue
         if isinstance(res, list):
             for event in res:
+                # Filter out localhost announcements
+                try:
+                    tags = event.get("tags", [])
+                    is_localhost = any(
+                        isinstance(tag, list)
+                        and len(tag) >= 2
+                        and tag[0] == "u"
+                        and tag[1] == "http://localhost:8000"
+                        for tag in tags
+                    )
+                    if is_localhost:
+                        logger.debug(
+                            f"Skipping localhost provider event: {event.get('id', 'unknown')}"
+                        )
+                        continue
+                except Exception:
+                    # If tags are malformed, fall through to normal handling
+                    pass
+
                 if (eid := event.get("id")) and eid not in event_ids:
                     event_ids.add(eid)
                     all_events.append(event)
