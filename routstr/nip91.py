@@ -497,7 +497,12 @@ async def announce_provider() -> None:
     if base_url and base_url.strip() and base_url.strip() != "http://localhost:8000":
         endpoint_urls.append(base_url.strip())
     if onion_url and onion_url.strip():
-        endpoint_urls.append(onion_url.strip())
+        ou = onion_url.strip()
+        if ou.endswith(".onion") and not (
+            ou.startswith("http://") or ou.startswith("https://")
+        ):
+            ou = f"http://{ou}"
+        endpoint_urls.append(ou)
 
     if not endpoint_urls:
         logger.warning(
