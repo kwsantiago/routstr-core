@@ -15,6 +15,10 @@ logger = get_logger(__name__)
 
 providers_router = APIRouter(prefix="/v1/providers")
 
+# In-memory providers cache and lock
+_PROVIDERS_CACHE: list[dict[str, Any]] = []
+_PROVIDERS_CACHE_LOCK = asyncio.Lock()
+
 
 def generate_subscription_id() -> str:
     """Generate a random subscription ID."""
@@ -116,8 +120,6 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
 
         # Extract optional tags
         description = None
-        contact = None
-        pricing_url = None
         supported_models = []
         mint_url = None
         version = None
@@ -145,7 +147,6 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
                     metadata = json.loads(content)
                     provider_name = metadata.get("name", "Unknown Provider")
                     description = metadata.get("about")
-                    contact = metadata.get("contact")
                 except (json.JSONDecodeError, TypeError):
                     provider_name = "Unknown Provider"
             else:
@@ -176,8 +177,6 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
             "endpoint_urls": endpoint_urls,  # All URLs for NIP-91
             "name": provider_name,
             "description": description,
-            "contact": contact,
-            "pricing_url": pricing_url,
             "mint_url": mint_url,
             "version": version,
             "supported_models": supported_models,
@@ -192,11 +191,110 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
 
 
 async def get_cache() -> list[dict[str, Any]]:
-    return []  # TODO: Implement cache
+    async with _PROVIDERS_CACHE_LOCK:
+        return list(_PROVIDERS_CACHE)
+
+
+def _get_discovery_relays() -> list[str]:
+    relays_env = os.getenv("RELAYS") or ""
+    discovery_relays = [r.strip() for r in relays_env.split(",") if r.strip()]
+    if not discovery_relays:
+        discovery_relays = [
+            "wss://relay.nostr.band",
+            "wss://relay.damus.io",
+            "wss://relay.routstr.com",
+        ]
+    return discovery_relays
+
+
+async def _discover_providers(pubkey: str | None = None) -> list[dict[str, Any]]:
+    discovery_relays = _get_discovery_relays()
+
+    tasks = [
+        query_nostr_relay_for_providers(relay_url=r, pubkey=pubkey, limit=100)
+        for r in discovery_relays
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    all_events: list[dict[str, Any]] = []
+    event_ids: set[str] = set()
+    for res in results:
+        if isinstance(res, BaseException):
+            logger.error(f"Relay query failed: {res}")
+            continue
+        if isinstance(res, list):
+            for event in res:
+                if (eid := event.get("id")) and eid not in event_ids:
+                    event_ids.add(eid)
+                    all_events.append(event)
+        else:
+            logger.error(f"Unexpected relay result type: {type(res)}")
+
+    providers: list[dict[str, Any]] = []
+    seen_endpoints: set[str] = set()
+    for event in all_events:
+        parsed = parse_provider_announcement(event)
+        if parsed and (eu := parsed.get("endpoint_url")) and eu not in seen_endpoints:
+            seen_endpoints.add(eu)
+            providers.append(parsed)
+
+    random.shuffle(providers)
+    return providers[:42]
+
+
+async def refresh_providers_cache(pubkey: str | None = None) -> None:
+    try:
+        providers = await _discover_providers(pubkey=pubkey)
+
+        health_tasks = [
+            fetch_provider_health(provider["endpoint_url"]) for provider in providers
+        ]
+        health_results = await asyncio.gather(*health_tasks, return_exceptions=True)
+
+        new_cache: list[dict[str, Any]] = []
+        for provider, hr in zip(providers, health_results):
+            if isinstance(hr, Exception):
+                health: dict[str, Any] = {
+                    "status_code": 500,
+                    "endpoint": "error",
+                    "json": {"error": str(hr)},
+                }
+            else:
+                health = hr  # type: ignore[assignment]
+            new_cache.append({"provider": provider, "health": health})
+
+        async with _PROVIDERS_CACHE_LOCK:
+            _PROVIDERS_CACHE.clear()
+            _PROVIDERS_CACHE.extend(new_cache)
+        logger.info(
+            f"Providers cache refreshed with {len(new_cache)} entries (limit 42)"
+        )
+    except Exception as e:
+        logger.error(f"Failed to refresh providers cache: {e}")
+
+
+async def providers_cache_refresher(
+    interval_seconds: int | None = None, pubkey: str | None = None
+) -> None:
+    if interval_seconds is None:
+        try:
+            interval_seconds = int(
+                os.getenv("PROVIDERS_REFRESH_INTERVAL_SECONDS", "300")
+            )
+        except ValueError:
+            interval_seconds = 300
+
+    await refresh_providers_cache(pubkey=pubkey)
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+        except asyncio.CancelledError:
+            break
+        await refresh_providers_cache(pubkey=pubkey)
 
 
 async def fetch_provider_health(endpoint_url: str) -> dict[str, Any]:
-    """Check if a provider endpoint is healthy by making a GET request."""
+    """Fetch provider health and info, preferring /v1/info for models and pricing."""
     try:
         # Determine if we need Tor proxy based on .onion domain
         is_onion = ".onion" in endpoint_url
@@ -213,7 +311,20 @@ async def fetch_provider_health(endpoint_url: str) -> dict[str, Any]:
             follow_redirects=True,
             proxies=proxies,  # type: ignore[arg-type]
         ) as client:
-            # Try to fetch models endpoint first (common for AI providers)
+            # Prefer provider's /v1/info for full details
+            info_url = f"{endpoint_url.rstrip('/')}/v1/info"
+            try:
+                response = await client.get(info_url)
+                if response.status_code == 200:
+                    return {
+                        "status_code": response.status_code,
+                        "endpoint": "info",
+                        "json": response.json(),
+                    }
+            except Exception:
+                pass
+
+            # Fallback to /v1/models
             models_url = f"{endpoint_url.rstrip('/')}/v1/models"
             try:
                 response = await client.get(models_url)
@@ -251,71 +362,16 @@ async def get_providers(
     include_json: bool = False, pubkey: str | None = None
 ) -> dict[str, list[dict[str, Any]]]:
     """
-    Discover Routstr providers using NIP-91 specification.
-    Searches for provider announcement events on Nostr relays:
-    - kind:38421 (NIP-91)
-
-    References:
-    - NIP-91: https://github.com/nostr-protocol/nips/pull/1987
+    Return cached providers. If include_json, return provider+health; otherwise provider only.
+    Optional filter by pubkey.
     """
-    # Default relays for provider discovery
-    # Configure relays: use RELAYS or defaults
-    relays_env = os.getenv("RELAYS") or ""
-    discovery_relays = [r.strip() for r in relays_env.split(",") if r.strip()]
-    if not discovery_relays:
-        discovery_relays = [
-            "wss://relay.nostr.band",
-            "wss://relay.damus.io",
-            "wss://relay.routstr.com",
-        ]
-
-    all_events = []
-    event_ids = set()  # To avoid duplicates
-
-    # Query multiple relays for provider announcements
-    for relay_url in discovery_relays:
-        logger.info(f"Querying relay for providers: {relay_url}")
-        try:
-            events = await query_nostr_relay_for_providers(
-                relay_url=relay_url,
-                pubkey=pubkey,
-                limit=100,
-            )
-
-            # Add unique events
-            for event in events:
-                if event["id"] not in event_ids:
-                    event_ids.add(event["id"])
-                    all_events.append(event)
-
-            logger.info(f"Got {len(events)} provider announcements from {relay_url}")
-
-        except Exception as e:
-            logger.error(f"Failed to query {relay_url}: {e}")
-            continue
-
-    logger.info(f"Found {len(all_events)} total unique provider announcements")
-
-    # Parse provider announcements according to NIP-91
-    providers = []
-    for event in all_events:
-        parsed_provider = parse_provider_announcement(event)
-        if parsed_provider:
-            providers.append(parsed_provider)
-
-    logger.info(f"Parsed {len(providers)} valid provider announcements")
-
-    # Check provider health if requested
-    healthy_providers: list[dict[str, Any]] = []
-    for provider in providers:
-        endpoint_url = provider["endpoint_url"]
-
-        if include_json:
-            health_check = await fetch_provider_health(endpoint_url)
-            provider_data = {"provider": provider, "health": health_check}
-            healthy_providers.append(provider_data)
-        else:
-            # Just return the provider info without health check
-            healthy_providers.append(provider)
-
-    return {"providers": healthy_providers}
+    cache = await get_cache()
+    if not cache:
+        await refresh_providers_cache(pubkey=pubkey)
+        cache = await get_cache()
+    if pubkey:
+        cache = [c for c in cache if c.get("provider", {}).get("pubkey") == pubkey]
+    if include_json:
+        return {"providers": cache}
+    providers_only = [c["provider"] for c in cache]
+    return {"providers": providers_only}
