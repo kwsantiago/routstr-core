@@ -21,6 +21,7 @@ from .payment.helpers import (
     create_error_response,
     get_max_cost_for_model,
     prepare_upstream_headers,
+    prepare_upstream_params,
 )
 from .payment.x_cashu import x_cashu_handler
 
@@ -283,7 +284,7 @@ async def forward_to_upstream(
                     url,
                     headers=headers,
                     content=request_body,
-                    params=request.query_params,
+                    params=prepare_upstream_params(path, request.query_params),
                 ),
                 stream=True,
             )
@@ -294,7 +295,7 @@ async def forward_to_upstream(
                     url,
                     headers=headers,
                     content=request.stream(),
-                    params=request.query_params,
+                    params=prepare_upstream_params(path, request.query_params),
                 ),
                 stream=True,
             )
@@ -722,7 +723,7 @@ async def forward_get_to_upstream(
                     url,
                     headers=headers,
                     content=request.stream(),
-                    params=request.query_params,
+                    params=prepare_upstream_params(path, request.query_params),
                 ),
             )
 
