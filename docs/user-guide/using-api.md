@@ -10,6 +10,15 @@ Routstr maintains full compatibility with the OpenAI API, meaning:
 - Only the base URL and API key need to change
 - All parameters and responses match OpenAI's format
 
+### Azure OpenAI compatibility
+
+To use Azure OpenAI through Routstr with minimal changes:
+
+- Set `UPSTREAM_BASE_URL` to your Azure deployments URL, for example: `https://<resource>.openai.azure.com/openai/deployments/<deployment>`
+- Set `CHAT_COMPLETIONS_API_VERSION=2024-05-01-preview`
+
+When this env var is set, Routstr automatically appends `api-version=2024-05-01-preview` to all upstream `/chat/completions` requests.
+
 ## Basic Setup
 
 ### Python
