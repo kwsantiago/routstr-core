@@ -10,8 +10,6 @@ Routstr Core is configured through environment variables. This guide covers all 
 |----------|-------------|---------|----------|
 | `UPSTREAM_BASE_URL` | Base URL of the OpenAI-compatible API to proxy | - | ✅ |
 | `UPSTREAM_API_KEY` | API key for the upstream service | - | ❌ |
-| `CHAT_COMPLETIONS_API_VERSION` | Append `api-version` to `/chat/completions` (Azure OpenAI) | - | ❌ |
-| `DATABASE_URL` | SQLite database connection string | `sqlite+aiosqlite:///keys.db` | ❌ |
 | `ADMIN_PASSWORD` | Password for admin dashboard access | - | ⚠️ |
 
 ### Node Information
@@ -56,13 +54,12 @@ Routstr Core is configured through environment variables. This guide covers all 
 | `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` | ❌ |
 | `ENABLE_CONSOLE_LOGGING` | Enable console log output | `true` | ❌ |
 
-### Model Management
+### Other
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `MODELS_PATH` | Path to custom models.json file | `models.json` | ❌ |
-| `BASE_URL` | Base URL for fetching model info | `https://openrouter.ai/api/v1` | ❌ |
-| `SOURCE` | Filter models by source provider | - | ❌ |
+| `CHAT_COMPLETIONS_API_VERSION` | Append `api-version` to `/chat/completions` (Azure OpenAI) | - | ❌ |
+| `DATABASE_URL` | SQLite database connection string | `sqlite+aiosqlite:///keys.db` | ❌ |
 
 ## Configuration Examples
 
