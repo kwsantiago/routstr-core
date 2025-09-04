@@ -57,7 +57,7 @@ async def query_nostr_relay_for_providers(
 
             while True:
                 try:
-                    message = await asyncio.wait_for(websocket.recv(), timeout=50)
+                    message = await asyncio.wait_for(websocket.recv(), timeout=5)
                     data = json.loads(message)
 
                     if data[0] == "EVENT" and data[1] == sub_id:
