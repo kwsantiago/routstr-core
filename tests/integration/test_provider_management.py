@@ -10,6 +10,12 @@ import pytest
 from httpx import AsyncClient
 
 from .utils import PerformanceValidator, ResponseValidator
+from routstr.discovery import _PROVIDERS_CACHE
+
+
+@pytest.fixture(autouse=True)
+def _clear_providers_cache() -> None:
+    _PROVIDERS_CACHE.clear()
 
 
 @pytest.mark.integration
@@ -212,18 +218,12 @@ async def test_providers_data_structure_validation(
                 assert "health" in provider_data
 
                 provider_info = provider_data["provider"]
-                # Expected fields from NIP-91 parser
-                expected_fields = ["id", "name", "endpoint_url", "supported_models"]
+                health_info = provider_data["health"]
+
+                # Expected fields from NIP-91 parser (supported_models removed)
+                expected_fields = ["id", "name", "endpoint_url"]
                 for field in expected_fields:
                     assert field in provider_info
-
-                # Validate models structure if present
-                if "supported_models" in provider_info:
-                    models = provider_info["supported_models"]
-                    assert isinstance(models, list)
-                    # Should have the models from the mocked event
-                    assert "gpt-3.5-turbo" in models
-                    assert "gpt-4" in models
 
 
 @pytest.mark.integration
@@ -233,8 +233,17 @@ async def test_providers_endpoint_no_providers_found(
 ) -> None:
     """Test providers endpoint when no providers are found"""
 
-    # Mock empty events (no providers mentioned)
-    mock_events: list[dict[str, Any]] = []
+    # Force empty discovery by returning events that are filtered out
+    mock_events: list[dict[str, Any]] = [
+        {
+            "id": "localhost-event",
+            "pubkey": "ignored_pubkey",
+            "kind": 38421,
+            "created_at": 1234567899,
+            "content": '{"name": "Local"}',
+            "tags": [["d", "local"], ["u", "http://localhost:8000"]],
+        }
+    ]
 
     with patch(
         "routstr.discovery.query_nostr_relay_for_providers", return_value=mock_events
@@ -454,11 +463,10 @@ async def test_providers_endpoint_malformed_urls(
             assert response.status_code == 200
             data = response.json()
 
-            # Should only extract valid onion URLs
-            providers = data["providers"]
-            for provider in providers:
-                assert provider.startswith("http://") or provider.startswith("https://")
-                assert provider.endswith(".onion")
+            # With NIP-91-only parsing, events without required tags are ignored
+            assert "providers" in data
+            assert isinstance(data["providers"], list)
+            assert len(data["providers"]) == 0
 
 
 @pytest.mark.integration
@@ -597,8 +605,14 @@ async def test_providers_endpoint_parameter_validation(
     mock_events: list[dict[str, Any]] = [
         {
             "id": "event1",
-            "content": "Provider: http://param-test-provider.onion",
+            "pubkey": "param_pubkey",
+            "kind": 38421,
             "created_at": 1234567890,
+            "content": '{"name": "Param Test Provider"}',
+            "tags": [
+                ["d", "param-test-provider"],
+                ["u", "http://param-test-provider.onion"],
+            ],
         }
     ]
 
@@ -626,13 +640,14 @@ async def test_providers_endpoint_parameter_validation(
 
                 if len(providers) > 0:
                     if expected_json_format:
-                        # Should be list of dictionaries
+                        # Should be list of {provider, health} dictionaries
+                        for item in providers:
+                            assert isinstance(item, dict)
+                            assert "provider" in item and "health" in item
+                    else:
+                        # Should be list of provider objects
                         for provider in providers:
                             assert isinstance(provider, dict)
-                    else:
-                        # Should be list of strings
-                        for provider in providers:
-                            assert isinstance(provider, str)
 
 
 @pytest.mark.integration
