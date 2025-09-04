@@ -10,7 +10,6 @@ Routstr Core is configured through environment variables. This guide covers all 
 |----------|-------------|---------|----------|
 | `UPSTREAM_BASE_URL` | Base URL of the OpenAI-compatible API to proxy | - | ✅ |
 | `UPSTREAM_API_KEY` | API key for the upstream service | - | ❌ |
-| `DATABASE_URL` | SQLite database connection string | `sqlite+aiosqlite:///keys.db` | ❌ |
 | `ADMIN_PASSWORD` | Password for admin dashboard access | - | ⚠️ |
 
 ### Node Information
@@ -55,13 +54,12 @@ Routstr Core is configured through environment variables. This guide covers all 
 | `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` | ❌ |
 | `ENABLE_CONSOLE_LOGGING` | Enable console log output | `true` | ❌ |
 
-### Model Management
+### Other
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `MODELS_PATH` | Path to custom models.json file | `models.json` | ❌ |
-| `BASE_URL` | Base URL for fetching model info | `https://openrouter.ai/api/v1` | ❌ |
-| `SOURCE` | Filter models by source provider | - | ❌ |
+| `CHAT_COMPLETIONS_API_VERSION` | Append `api-version` to `/chat/completions` (Azure OpenAI) | - | ❌ |
+| `DATABASE_URL` | SQLite database connection string | `sqlite+aiosqlite:///keys.db` | ❌ |
 
 ## Configuration Examples
 
@@ -82,6 +80,15 @@ UPSTREAM_BASE_URL=https://api.anthropic.com/v1
 UPSTREAM_API_KEY=your-anthropic-key
 MODEL_BASED_PRICING=true
 MODELS_PATH=/app/config/anthropic-models.json
+```
+
+### Azure OpenAI (optional)
+
+```bash
+# .env
+UPSTREAM_BASE_URL=https://<resource>.openai.azure.com/openai/deployments/<deployment>
+UPSTREAM_API_KEY=<azure_api_key>
+CHAT_COMPLETIONS_API_VERSION=2024-05-01-preview
 ```
 
 ### High-Security Setup
@@ -174,6 +181,7 @@ Create a `models.json` file:
 ### Admin Password
 
 Generate a strong password:
+
 ```bash
 openssl rand -base64 32
 ```
@@ -211,18 +219,21 @@ curl http://localhost:8000/v1/info
 ### Common Issues
 
 **Missing Upstream URL**
+
 ```
 ERROR: UPSTREAM_BASE_URL not set
 Solution: Set UPSTREAM_BASE_URL in .env
 ```
 
 **Invalid Cashu Mint**
+
 ```
 ERROR: Failed to connect to mint
 Solution: Verify CASHU_MINTS URLs are accessible
 ```
 
 **Database Errors**
+
 ```
 ERROR: Database connection failed
 Solution: Check DATABASE_URL and file permissions
@@ -233,6 +244,7 @@ Solution: Check DATABASE_URL and file permissions
 ### Multiple Mints
 
 Configure fallback mints:
+
 ```bash
 CASHU_MINTS=https://primary.mint,https://backup1.mint,https://backup2.mint
 ```
@@ -240,6 +252,7 @@ CASHU_MINTS=https://primary.mint,https://backup1.mint,https://backup2.mint
 ### Custom Database
 
 Use PostgreSQL instead of SQLite:
+
 ```bash
 DATABASE_URL=postgresql+asyncpg://user:pass@localhost/routstr
 ```
@@ -247,6 +260,7 @@ DATABASE_URL=postgresql+asyncpg://user:pass@localhost/routstr
 ### Proxy Settings
 
 For corporate environments:
+
 ```bash
 HTTP_PROXY=http://proxy.company.com:8080
 HTTPS_PROXY=http://proxy.company.com:8080
