@@ -7,6 +7,7 @@ Automatically announces this Routstr proxy instance to Nostr relays.
 import asyncio
 import json
 import os
+import random
 import ssl
 import time
 from typing import Any, cast
@@ -167,15 +168,19 @@ async def query_nip91_events(
     pubkey: str,
     provider_id: str | None = None,
     timeout: int = 30,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], bool]:
     """
     Query a Nostr relay for NIP-91 provider announcements (kind:38421) via nostr library.
+
+    Returns a tuple of (events, ok) where ok indicates whether the relay interaction
+    succeeded without transport-level errors.
     """
 
-    def _sync_query() -> list[dict[str, Any]]:
+    def _sync_query() -> tuple[list[dict[str, Any]], bool]:
         rm = RelayManager()
         rm.add_relay(relay_url)
         events_out: list[dict[str, Any]] = []
+        ok = True
         try:
             rm.open_connections({"cert_reqs": ssl.CERT_NONE})
             time.sleep(1.0)
@@ -230,13 +235,14 @@ async def query_nip91_events(
 
                 time.sleep(0.1)
         except Exception as e:
+            ok = False
             logger.debug(f"Failed to query relay {relay_url}: {type(e).__name__}")
         finally:
             try:
                 rm.close_connections()
             except Exception:
                 pass
-        return events_out
+        return events_out, ok
 
     return await asyncio.to_thread(_sync_query)
 
@@ -289,7 +295,7 @@ async def _determine_provider_id(public_key_hex: str, relay_urls: list[str]) -> 
     latest_ts = -1
     for relay_url in relay_urls:
         try:
-            events = await query_nip91_events(relay_url, public_key_hex, None)
+            events, _ok = await query_nip91_events(relay_url, public_key_hex, None)
             for ev in events:
                 ts = int(ev.get("created_at", 0))
                 if ts > latest_ts:
@@ -426,11 +432,43 @@ async def announce_provider() -> None:
         metadata=metadata,
     )
 
+    # Backoff configuration and state
+    backoff_base = float(os.getenv("NIP91_BACKOFF_BASE_SECONDS", "5"))
+    backoff_max = float(os.getenv("NIP91_BACKOFF_MAX_SECONDS", "900"))
+    backoff_jitter_ratio = float(os.getenv("NIP91_BACKOFF_JITTER_RATIO", "0.2"))
+    relay_next_allowed: dict[str, float] = {}
+    relay_current_delay: dict[str, float] = {}
+
+    def _should_skip(relay: str) -> bool:
+        return time.time() < relay_next_allowed.get(relay, 0.0)
+
+    def _register_success(relay: str) -> None:
+        relay_current_delay[relay] = 0.0
+        relay_next_allowed[relay] = time.time()
+
+    def _register_failure(relay: str) -> None:
+        previous = relay_current_delay.get(relay, 0.0)
+        delay = backoff_base if previous <= 0.0 else min(backoff_max, previous * 2.0)
+        jitter = delay * backoff_jitter_ratio * (2.0 * random.random() - 1.0)
+        scheduled = time.time() + max(0.0, delay + jitter)
+        relay_current_delay[relay] = delay
+        relay_next_allowed[relay] = scheduled
+        logger.debug(
+            f"Backoff: {relay} delay={delay:.1f}s jitter={jitter:.1f}s next={int(scheduled)}"
+        )
+
     # Fetch existing events for this provider_id
     existing_events: list[dict[str, Any]] = []
     for relay_url in relay_urls:
-        events = await query_nip91_events(relay_url, public_key_hex, provider_id)
-        existing_events.extend(events)
+        if _should_skip(relay_url):
+            logger.debug(f"Skipping {relay_url} due to backoff")
+            continue
+        events, ok = await query_nip91_events(relay_url, public_key_hex, provider_id)
+        if ok:
+            _register_success(relay_url)
+            existing_events.extend(events)
+        else:
+            _register_failure(relay_url)
 
     # Decide whether to publish: publish if none exist or any differ from candidate
     found_any = len(existing_events) > 0
@@ -444,8 +482,14 @@ async def announce_provider() -> None:
         )
         success_count = 0
         for relay_url in relay_urls:
+            if _should_skip(relay_url):
+                logger.debug(f"Skipping publish to {relay_url} due to backoff")
+                continue
             if await publish_to_relay(relay_url, candidate_event):
+                _register_success(relay_url)
                 success_count += 1
+            else:
+                _register_failure(relay_url)
         logger.info(
             f"Published NIP-91 announcement to {success_count}/{len(relay_urls)} relays"
         )
@@ -477,10 +521,17 @@ async def announce_provider() -> None:
             # Fetch existing events for this provider_id
             existing_events = []
             for relay_url in relay_urls:
-                events = await query_nip91_events(
+                if _should_skip(relay_url):
+                    logger.debug(f"Skipping {relay_url} due to backoff")
+                    continue
+                events, ok = await query_nip91_events(
                     relay_url, public_key_hex, provider_id
                 )
-                existing_events.extend(events)
+                if ok:
+                    _register_success(relay_url)
+                    existing_events.extend(events)
+                else:
+                    _register_failure(relay_url)
 
             found_any = len(existing_events) > 0
             all_match = found_any and all(
@@ -497,7 +548,14 @@ async def announce_provider() -> None:
                 f"Re-announcing provider due to differences or absence: {candidate_event['id']}"
             )
             for relay_url in relay_urls:
-                await publish_to_relay(relay_url, candidate_event)
+                if _should_skip(relay_url):
+                    logger.debug(f"Skipping publish to {relay_url} due to backoff")
+                    continue
+                ok = await publish_to_relay(relay_url, candidate_event)
+                if ok:
+                    _register_success(relay_url)
+                else:
+                    _register_failure(relay_url)
 
         except asyncio.CancelledError:
             logger.info("NIP-91 announcement task cancelled")
