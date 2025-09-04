@@ -9,8 +9,9 @@ from unittest.mock import patch
 import pytest
 from httpx import AsyncClient
 
-from .utils import PerformanceValidator, ResponseValidator
 from routstr.discovery import _PROVIDERS_CACHE
+
+from .utils import PerformanceValidator, ResponseValidator
 
 
 @pytest.fixture(autouse=True)
@@ -218,7 +219,7 @@ async def test_providers_data_structure_validation(
                 assert "health" in provider_data
 
                 provider_info = provider_data["provider"]
-                health_info = provider_data["health"]
+                # health_info = provider_data["health"]
 
                 # Expected fields from NIP-91 parser (supported_models removed)
                 expected_fields = ["id", "name", "endpoint_url"]
