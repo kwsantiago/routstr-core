@@ -170,11 +170,10 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
             return None
 
         return {
-            "id": event["id"],
+            "id": d_tag,
             "pubkey": event["pubkey"],
             "created_at": event["created_at"],
             "kind": kind,
-            "d_tag": d_tag,
             "endpoint_url": endpoint_url,
             "endpoint_urls": endpoint_urls,  # All URLs for NIP-91
             "name": provider_name,
