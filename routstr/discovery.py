@@ -126,7 +126,7 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
 
         # Extract optional tags
         description = None
-        mint_url = None
+        mint_urls = []
         version = None
 
         # Parse NIP-91 format
@@ -138,7 +138,7 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
                     elif tag[0] == "u":
                         endpoint_urls.append(tag[1])
                     elif tag[0] == "mint":
-                        mint_url = tag[1]
+                        mint_urls.append(tag[1])
                     elif tag[0] == "version":
                         version = tag[1]
 
@@ -178,7 +178,7 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
             "endpoint_urls": endpoint_urls,  # All URLs for NIP-91
             "name": provider_name,
             "description": description,
-            "mint_url": mint_url,
+            "mint_urls": mint_urls,
             "version": version,
             "content": event.get("content", ""),
         }
