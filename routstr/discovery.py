@@ -68,7 +68,13 @@ async def query_nostr_relay_for_providers(
                         logger.debug("Received EOSE message")
                         break
                     elif data[0] == "NOTICE":
-                        logger.warning(f"Relay notice: {data[1]}")
+                        try:
+                            msg = str(data[1])
+                            if len(msg) > 200:
+                                msg = msg[:200] + "..."
+                            logger.debug(f"Relay notice: {msg}")
+                        except Exception:
+                            logger.debug("Relay notice received")
 
                 except asyncio.TimeoutError:
                     logger.debug("Timeout waiting for message")
@@ -80,7 +86,7 @@ async def query_nostr_relay_for_providers(
             await websocket.send(json.dumps(["CLOSE", sub_id]))
 
     except Exception as e:
-        logger.error(f"Query failed: {e}")
+        logger.debug(f"Query failed: {type(e).__name__}")
 
     logger.info(f"Query complete. Found {len(events)} provider announcements")
     return events
@@ -120,7 +126,6 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
 
         # Extract optional tags
         description = None
-        supported_models = []
         mint_url = None
         version = None
 
@@ -132,9 +137,6 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
                         d_tag = tag[1]
                     elif tag[0] == "u":
                         endpoint_urls.append(tag[1])
-                    elif tag[0] == "models" and len(tag) > 1:
-                        # NIP-91 uses single models tag with multiple values
-                        supported_models = tag[1:]
                     elif tag[0] == "mint":
                         mint_url = tag[1]
                     elif tag[0] == "version":
@@ -179,7 +181,6 @@ def parse_provider_announcement(event: dict[str, Any]) -> dict[str, Any] | None:
             "description": description,
             "mint_url": mint_url,
             "version": version,
-            "supported_models": supported_models,
             "content": event.get("content", ""),
         }
 

@@ -5,17 +5,19 @@ Automatically announces this Routstr proxy instance to Nostr relays.
 """
 
 import asyncio
-import hashlib
 import json
 import os
+import ssl
 import time
 from typing import Any, cast
 
-import secp256k1
-import websockets
+from nostr.event import Event
+from nostr.filter import Filter, Filters
+from nostr.key import PrivateKey
+from nostr.message_type import ClientMessageType
+from nostr.relay_manager import RelayManager
 
 from .core import get_logger
-from .payment.models import MODELS
 
 logger = get_logger(__name__)
 
@@ -29,35 +31,16 @@ def get_app_version() -> str | None:
         return None
 
 
-def _schnorr_sign_event_id(
-    private_key: secp256k1.PrivateKey, event_id_hex: str
-) -> bytes:
-    """Return 64-byte Schnorr signature over the 32-byte event id."""
-    msg32 = bytes.fromhex(event_id_hex)
-
-    # Try common API variants exposed by python-secp256k1 bindings
-    method = getattr(private_key, "schnorr_sign", None)
-    if callable(method):
-        try:
-            sig = method(msg32)
-            if isinstance(sig, bytes) and len(sig) == 64:
-                return sig
-        except TypeError:
-            pass
-        try:
-            sig = method(msg32, None, True)
-            if isinstance(sig, bytes) and len(sig) == 64:
-                return sig
-        except TypeError:
-            pass
-
-    method32 = getattr(private_key, "schnorr_sign32", None)
-    if callable(method32):
-        sig = method32(msg32)
-        if isinstance(sig, bytes) and len(sig) == 64:
-            return sig
-
-    raise RuntimeError("Schnorr signing not available in secp256k1 binding")
+def _event_to_dict(ev: Event) -> dict[str, Any]:
+    return {
+        "id": ev.id,
+        "pubkey": ev.public_key,
+        "created_at": ev.created_at,
+        "kind": int(ev.kind) if not isinstance(ev.kind, int) else ev.kind,
+        "tags": ev.tags,
+        "content": ev.content,
+        "sig": ev.signature,
+    }
 
 
 def nsec_to_keypair(nsec: str) -> tuple[str, str] | None:
@@ -71,25 +54,16 @@ def nsec_to_keypair(nsec: str) -> tuple[str, str] | None:
         Tuple of (private_key_hex, public_key_hex) or None if invalid
     """
     try:
-        # Handle nsec format
         if nsec.startswith("nsec"):
-            # Simple bech32 decode - for production use a proper library
-            # For now, we'll assume hex format is passed
-            logger.warning("nsec format not yet implemented, please use hex format")
-            return None
+            pk = PrivateKey.from_nsec(nsec)
+            return (pk.hex(), pk.public_key.hex())
 
-        # Assume hex format
-        if len(nsec) != 64:
-            logger.error(f"Invalid private key length: {len(nsec)}")
-            return None
+        if len(nsec) == 64:
+            pk = PrivateKey(bytes.fromhex(nsec))
+            return (pk.hex(), pk.public_key.hex())
 
-        private_key = secp256k1.PrivateKey(bytes.fromhex(nsec))
-        pubkey_obj = cast(secp256k1.PublicKey, private_key.pubkey)
-        public_key = pubkey_obj.serialize(compressed=True)[
-            1:
-        ]  # Remove 0x02/0x03 prefix
-
-        return (nsec, public_key.hex())
+        logger.error(f"Invalid private key format/length: {len(nsec)}")
+        return None
     except Exception as e:
         logger.error(f"Failed to convert nsec to keypair: {e}")
         return None
@@ -99,8 +73,7 @@ def create_nip91_event(
     private_key_hex: str,
     provider_id: str,
     endpoint_urls: list[str],
-    supported_models: list[str],
-    mint_url: str | None = None,
+    mint_urls: list[str] | None = None,
     version: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -111,99 +84,30 @@ def create_nip91_event(
         private_key_hex: 32-byte hex private key for signing
         provider_id: Unique identifier for this provider (d tag)
         endpoint_urls: List of URLs to connect to the provider
-        supported_models: List of supported AI model IDs
-        mint_url: Optional ecash mint URL for payments
+        mint_urls: Optional list of ecash mint URLs for payments
         version: Provider software version
         metadata: Optional metadata dictionary (name, picture, about, etc.)
 
     Returns:
-        Complete signed nostr event ready for publishing
+        Complete signed nostr event as a dict ready for publishing
     """
-    # Convert hex private key to secp256k1 PrivateKey object
-    private_key = secp256k1.PrivateKey(bytes.fromhex(private_key_hex))
-    pubkey_obj = cast(secp256k1.PublicKey, private_key.pubkey)
-    public_key = pubkey_obj.serialize(compressed=True)[1:]  # Remove 0x02/0x03 prefix
+    pk = PrivateKey(bytes.fromhex(private_key_hex))
 
-    # Build tags according to NIP-91
-    tags = [
-        ["d", provider_id],  # Unique identifier
-    ]
-
-    # Add URLs
+    tags = [["d", provider_id]]
     for url in endpoint_urls:
         tags.append(["u", url])
-
-    # Add models as a single tag with multiple values
-    # if supported_models:
-    #     tags.append(["models"] + supported_models)
-
-    # Add optional tags
-    if mint_url:
-        tags.append(["mint", mint_url])
+    if mint_urls:
+        for m in mint_urls:
+            if m:
+                tags.append(["mint", m])
     if version:
         tags.append(["version", version])
 
-    # Add model capabilities if detailed info available
-    # for model in MODELS:
-    #     if model.id in supported_models:
-    #         capabilities = []
+    content = json.dumps(metadata, separators=(",", ":")) if metadata else ""
 
-    #         # Add max_tokens from context_length
-    #         if model.context_length:
-    #             capabilities.append(f"max_tokens:{model.context_length}")
-
-    #         # Check if model supports vision (simplified check)
-    #         if any(modal in ["image"] for modal in model.architecture.input_modalities):
-    #             capabilities.append("vision:true")
-    #         else:
-    #             capabilities.append("vision:false")
-
-    #         # Check if model supports tools (simplified - most modern models do)
-    #         if "gpt" in model.id or "claude" in model.id or "llama" in model.id:
-    #             capabilities.append("tools:true")
-    #         else:
-    #             capabilities.append("tools:false")
-
-    #         if capabilities:
-    #             tags.append(["model-cap", model.id, ",".join(capabilities)])
-
-    # Content is optional metadata as JSON string
-    content = ""
-    if metadata:
-        content = json.dumps(metadata, separators=(",", ":"))
-
-    # Create the event structure
-    created_at = int(time.time())
-    event_data = [
-        0,  # Reserved field
-        public_key.hex(),  # Public key as hex
-        created_at,  # Unix timestamp
-        38421,  # Kind for NIP-91 Provider Announcements
-        tags,  # Tags array
-        content,  # Content (metadata)
-    ]
-
-    # Serialize event data for hashing
-    event_json = json.dumps(event_data, separators=(",", ":"), ensure_ascii=False)
-
-    # Calculate event ID (SHA256 hash)
-    event_id = hashlib.sha256(event_json.encode("utf-8")).hexdigest()
-
-    # Sign the event ID using Schnorr (BIP-340)
-    sig_hex = _schnorr_sign_event_id(private_key, event_id).hex()
-
-    # Create the final event
-    event = {
-        "id": event_id,
-        "pubkey": public_key.hex(),
-        "created_at": created_at,
-        "kind": 38421,
-        "tags": tags,
-        "content": content,
-        "sig": sig_hex,
-    }
-
-    return event
+    ev = Event(pk.public_key.hex(), content, kind=38421, tags=tags)
+    pk.sign_event(ev)
+    return _event_to_dict(ev)
 
 
 def _get_tag_values(event: dict[str, Any], key: str) -> list[str]:
@@ -242,7 +146,9 @@ def events_semantically_equal(a: dict[str, Any], b: dict[str, Any]) -> bool:
     if urls_a != urls_b:
         return False
 
-    if _get_single_tag_value(a, "mint") != _get_single_tag_value(b, "mint"):
+    mints_a = set(_get_tag_values(a, "mint"))
+    mints_b = set(_get_tag_values(b, "mint"))
+    if mints_a != mints_b:
         return False
 
     if _get_single_tag_value(a, "version") != _get_single_tag_value(b, "version"):
@@ -263,63 +169,76 @@ async def query_nip91_events(
     timeout: int = 30,
 ) -> list[dict[str, Any]]:
     """
-    Query a Nostr relay for NIP-91 provider announcements (kind:38421).
-
-    Args:
-        relay_url: WebSocket URL of the nostr relay
-        pubkey: Public key to filter by
-        timeout: Connection timeout in seconds
-
-    Returns:
-        List of NIP-91 events from the given pubkey
+    Query a Nostr relay for NIP-91 provider announcements (kind:38421) via nostr library.
     """
-    events = []
 
-    # Build filter for NIP-91 events from specific pubkey
-    filter_obj: dict[str, Any] = {
-        "kinds": [38421],
-        "authors": [pubkey],
-        "limit": 10,
-    }
-    if provider_id:
-        filter_obj["#d"] = [provider_id]
+    def _sync_query() -> list[dict[str, Any]]:
+        rm = RelayManager()
+        rm.add_relay(relay_url)
+        events_out: list[dict[str, Any]] = []
+        try:
+            rm.open_connections({"cert_reqs": ssl.CERT_NONE})
+            time.sleep(1.0)
 
-    sub_id = f"nip91_{int(time.time())}"
-    req_message = json.dumps(["REQ", sub_id, filter_obj])
+            flt = Filter(kinds=[38421], authors=[pubkey], limit=10)
+            filters = Filters([flt])
+            sub_id = f"nip91_{int(time.time())}"
+            rm.add_subscription(sub_id, filters)
+            req: list[Any] = [ClientMessageType.REQUEST, sub_id]
+            req.extend(filters.to_json_array())
+            rm.publish_message(json.dumps(req))
 
-    try:
-        async with websockets.connect(relay_url, open_timeout=timeout) as websocket:
-            logger.debug(f"Querying {relay_url} for existing NIP-91 events")
-            await websocket.send(req_message)
+            start = time.time()
+            last_event_ts = start
+            while time.time() - start < timeout:
+                drained = False
+                while rm.message_pool.has_events():
+                    drained = True
+                    ev_msg = rm.message_pool.get_event()
+                    ev = ev_msg.event
+                    ev_dict = _event_to_dict(ev)
+                    if provider_id is not None:
+                        tags = ev_dict.get("tags", [])
+                        if not any(
+                            isinstance(t, list)
+                            and len(t) >= 2
+                            and t[0] == "d"
+                            and t[1] == provider_id
+                            for t in tags
+                        ):
+                            continue
+                    events_out.append(ev_dict)
+                    logger.debug(
+                        f"Found existing NIP-91 event: {ev_dict.get('id', '')}"
+                    )
+                if drained:
+                    last_event_ts = time.time()
 
-            while True:
-                try:
-                    message = await asyncio.wait_for(websocket.recv(), timeout=5)
-                    data = json.loads(message)
+                while rm.message_pool.has_notices():
+                    notice = rm.message_pool.get_notice()
+                    try:
+                        content = getattr(notice, "content", notice)
+                        s = str(content)
+                        if len(s) > 200:
+                            s = s[:200] + "..."
+                        logger.debug(f"Relay notice: {s}")
+                    except Exception:
+                        pass
 
-                    if data[0] == "EVENT" and data[1] == sub_id:
-                        event = data[2]
-                        logger.debug(f"Found existing NIP-91 event: {event['id']}")
-                        events.append(event)
-                    elif data[0] == "EOSE" and data[1] == sub_id:
-                        logger.debug("Received EOSE message")
-                        break
-                    elif data[0] == "NOTICE":
-                        logger.warning(f"Relay notice: {data[1]}")
-
-                except asyncio.TimeoutError:
-                    logger.debug("Timeout waiting for relay response")
+                if time.time() - last_event_ts > 2.5:
                     break
-                except json.JSONDecodeError:
-                    logger.debug("Failed to decode relay message as JSON")
-                    continue
 
-            await websocket.send(json.dumps(["CLOSE", sub_id]))
+                time.sleep(0.1)
+        except Exception as e:
+            logger.debug(f"Failed to query relay {relay_url}: {type(e).__name__}")
+        finally:
+            try:
+                rm.close_connections()
+            except Exception:
+                pass
+        return events_out
 
-    except Exception as e:
-        logger.error(f"Failed to query relay {relay_url}: {e}")
-
-    return events
+    return await asyncio.to_thread(_sync_query)
 
 
 def discover_onion_url_from_tor(base_dir: str = "/var/lib/tor") -> str | None:
@@ -395,50 +314,30 @@ async def publish_to_relay(
     timeout: int = 30,
 ) -> bool:
     """
-    Publish a NIP-91 event to a nostr relay.
-
-    Args:
-        relay_url: WebSocket URL of the nostr relay
-        event: Complete signed nostr event to publish
-        timeout: Connection timeout in seconds
-
-    Returns:
-        True if successfully published, False otherwise
+    Publish a NIP-91 event to a nostr relay via nostr library.
     """
-    try:
-        async with websockets.connect(relay_url, open_timeout=timeout) as websocket:
-            # Send EVENT message
-            event_message = json.dumps(["EVENT", event])
-            await websocket.send(event_message)
-            logger.debug(f"Sent NIP-91 event {event['id']} to {relay_url}")
 
-            # Wait for OK response
+    def _sync_publish() -> bool:
+        rm = RelayManager()
+        rm.add_relay(relay_url)
+        try:
+            rm.open_connections({"cert_reqs": ssl.CERT_NONE})
+            time.sleep(1.0)
+            # Publish the event as-is via publish_message to preserve signature
+            rm.publish_message(json.dumps(["EVENT", event]))
+            logger.debug(f"Sent NIP-91 event {event.get('id', '')} to {relay_url}")
+            time.sleep(1.0)
+            return True
+        except Exception as e:
+            logger.debug(f"Failed to publish to {relay_url}: {type(e).__name__}")
+            return False
+        finally:
             try:
-                response = await asyncio.wait_for(websocket.recv(), timeout=50)
-                data = json.loads(response)
-                logger.debug(f"Relay response: {data}")
+                rm.close_connections()
+            except Exception:
+                pass
 
-                if data[0] == "OK" and data[1] == event["id"]:
-                    if data[2]:  # True means accepted
-                        logger.info(f"Event accepted by {relay_url}")
-                        return True
-                    else:
-                        logger.warning(f"Event rejected by {relay_url}")
-                        return False
-                elif data[0] == "NOTICE":
-                    logger.warning(f"Relay notice from {relay_url}: {data[1]}")
-                    return False
-                else:
-                    logger.debug(f"Unexpected response from {relay_url}: {data}")
-                    return False
-
-            except asyncio.TimeoutError:
-                logger.warning(f"No response from {relay_url} within timeout")
-                return False
-
-    except Exception as e:
-        logger.error(f"Failed to publish to {relay_url}: {e}")
-        return False
+    return await asyncio.to_thread(_sync_publish)
 
 
 async def announce_provider() -> None:
@@ -486,11 +385,11 @@ async def announce_provider() -> None:
             logger.info(f"Discovered onion URL via Tor volume: {onion_url}")
     provider_name = os.getenv("NAME", "Routstr Proxy")
     provider_about = os.getenv("DESCRIPTION", "Privacy-preserving AI proxy via Nostr")
-    # Mint URL optional: first CASHU_MINTS entry if available
+    # Mint URLs optional: include all CASHU_MINTS entries if available
     cashu_mints = [
         m.strip() for m in os.getenv("CASHU_MINTS", "").split(",") if m.strip()
     ]
-    mint_url = cashu_mints[0] if cashu_mints else None
+    mint_urls = cashu_mints if cashu_mints else None
 
     # Build endpoint URLs (skip defaults like localhost)
     endpoint_urls: list[str] = []
@@ -510,12 +409,6 @@ async def announce_provider() -> None:
         )
         return
 
-    # Get supported models
-    supported_models = [model.id for model in MODELS]
-    if not supported_models:
-        logger.warning("No models loaded, will announce with empty model list")
-        supported_models = []
-
     # Build metadata
     metadata = {
         "name": provider_name,
@@ -528,8 +421,7 @@ async def announce_provider() -> None:
         private_key_hex=private_key_hex,
         provider_id=provider_id,
         endpoint_urls=endpoint_urls,
-        supported_models=supported_models,
-        mint_url=mint_url,
+        mint_urls=mint_urls,
         version=version_str,
         metadata=metadata,
     )
@@ -577,8 +469,7 @@ async def announce_provider() -> None:
                 private_key_hex=private_key_hex,
                 provider_id=provider_id,
                 endpoint_urls=endpoint_urls,
-                supported_models=[model.id for model in MODELS],
-                mint_url=mint_url,
+                mint_urls=mint_urls,
                 version=version_str,
                 metadata=metadata,
             )
@@ -612,5 +503,5 @@ async def announce_provider() -> None:
             logger.info("NIP-91 announcement task cancelled")
             break
         except Exception as e:
-            logger.error(f"Error in NIP-91 announcement loop: {e}")
+            logger.debug(f"Error in NIP-91 announcement loop: {type(e).__name__}")
             # Continue running despite errors
