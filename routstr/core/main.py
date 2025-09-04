@@ -24,7 +24,7 @@ from .middleware import LoggingMiddleware
 setup_logging()
 logger = get_logger(__name__)
 
-__version__ = "0.1.1b"
+__version__ = "0.1.2"
 
 
 @asynccontextmanager
