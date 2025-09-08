@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlmodel import select
@@ -24,11 +24,19 @@ logger = get_logger(__name__)
 admin_router = APIRouter(prefix="/admin", include_in_schema=False)
 
 
-@admin_router.get("/api/settings")
-async def get_settings(request: Request) -> dict:
+def require_admin_api(request: Request) -> None:
     admin_cookie = request.cookies.get("admin_password")
     if not admin_cookie or admin_cookie != settings.admin_password:
         raise HTTPException(status_code=403, detail="Unauthorized")
+
+
+def is_admin_authenticated(request: Request) -> bool:
+    admin_cookie = request.cookies.get("admin_password")
+    return bool(admin_cookie and admin_cookie == settings.admin_password)
+
+
+@admin_router.get("/api/settings", dependencies=[Depends(require_admin_api)])
+async def get_settings(request: Request) -> dict:
     data = settings.dict()
     if "upstream_api_key" in data:
         data["upstream_api_key"] = "[REDACTED]" if data["upstream_api_key"] else ""
@@ -43,12 +51,8 @@ class SettingsUpdate(BaseModel):
     __root__: dict[str, object]
 
 
-@admin_router.patch("/api/settings")
+@admin_router.patch("/api/settings", dependencies=[Depends(require_admin_api)])
 async def update_settings(request: Request, update: SettingsUpdate) -> dict:
-    admin_cookie = request.cookies.get("admin_password")
-    if not admin_cookie or admin_cookie != settings.admin_password:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-
     async with create_session() as session:
         new_settings = await SettingsService.update(update.__root__, session)
     data = new_settings.dict()
@@ -495,26 +499,14 @@ async def dashboard(request: Request) -> str:
 
 @admin_router.get("/", response_class=HTMLResponse)
 async def admin(request: Request) -> str:
-    admin_cookie = request.cookies.get("admin_password")
-    try:
-        settings = SettingsService.get()
-        admin_pw: str = settings.admin_password
-    except Exception:
-        admin_pw = os.getenv("ADMIN_PASSWORD", "") or ""
-    if admin_cookie and admin_cookie == admin_pw:
+    if is_admin_authenticated(request):
         return await dashboard(request)
     return admin_auth()
 
 
 @admin_router.get("/logs/{request_id}", response_class=HTMLResponse)
 async def view_logs(request: Request, request_id: str) -> str:
-    admin_cookie = request.cookies.get("admin_password")
-    try:
-        settings = SettingsService.get()
-        admin_pw: str = settings.admin_password
-    except Exception:
-        admin_pw = os.getenv("ADMIN_PASSWORD", "") or ""
-    if not admin_cookie or admin_cookie != admin_pw:
+    if not is_admin_authenticated(request):
         return admin_auth()
 
     logger.info(f"Investigating logs for request_id: {request_id}")
@@ -707,19 +699,10 @@ async def view_logs(request: Request, request_id: str) -> str:
     """
 
 
-@admin_router.post("/withdraw")
+@admin_router.post("/withdraw", dependencies=[Depends(require_admin_api)])
 async def withdraw(
     request: Request, withdraw_request: WithdrawRequest
 ) -> dict[str, str]:
-    admin_cookie = request.cookies.get("admin_password")
-    try:
-        settings = SettingsService.get()
-        admin_pw: str = settings.admin_password
-    except Exception:
-        admin_pw = os.getenv("ADMIN_PASSWORD", "") or ""
-    if not admin_cookie or admin_cookie != admin_pw:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-
     # Get wallet and check balance
     from .settings import settings as global_settings
 
