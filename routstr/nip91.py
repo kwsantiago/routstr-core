@@ -287,7 +287,7 @@ def discover_onion_url_from_tor(base_dir: str = "/var/lib/tor") -> str | None:
 
 
 async def _determine_provider_id(public_key_hex: str, relay_urls: list[str]) -> str:
-    explicit = settings.provider_id or settings.nip91_provider_id
+    explicit = settings.provider_id
     if explicit:
         logger.info(f"Using configured provider_id from env: {explicit}")
         return explicit
@@ -368,10 +368,7 @@ async def announce_provider() -> None:
     logger.info(f"Using Nostr pubkey: {public_key_hex}")
 
     # Configure relays first (RELAYS only)
-    try:
-        relay_urls = [u.strip() for u in settings.relays if u.strip()]
-    except Exception:
-        relay_urls = settings.relays
+    relay_urls = [u.strip() for u in getattr(settings, "relays", []) if u.strip()]
     if not relay_urls:
         relay_urls = [
             "wss://relay.nostr.band",
@@ -438,15 +435,10 @@ async def announce_provider() -> None:
         metadata=metadata,
     )
 
-    # Backoff configuration and state
-    try:
-        backoff_base = settings.nip91_backoff_base_seconds
-        backoff_max = settings.nip91_backoff_max_seconds
-        backoff_jitter_ratio = settings.nip91_backoff_jitter_ratio
-    except Exception:
-        backoff_base = settings.nip91_backoff_base_seconds
-        backoff_max = settings.nip91_backoff_max_seconds
-        backoff_jitter_ratio = settings.nip91_backoff_jitter_ratio
+    # Backoff configuration and state (sensible defaults)
+    backoff_base = 5.0
+    backoff_max = 900.0
+    backoff_jitter_ratio = 0.2
     relay_next_allowed: dict[str, float] = {}
     relay_current_delay: dict[str, float] = {}
 
@@ -510,10 +502,7 @@ async def announce_provider() -> None:
         )
 
     # Re-announce periodically (every 24 hours)
-    try:
-        announcement_interval = settings.nip91_announcement_interval
-    except Exception:
-        announcement_interval = settings.nip91_announcement_interval
+    announcement_interval = 24 * 60 * 60
 
     while True:
         try:

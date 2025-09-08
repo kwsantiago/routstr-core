@@ -69,29 +69,13 @@ class Settings(BaseSettings):
     )
     models_path: str = Field(default="models.json", env="MODELS_PATH")
     source: str = Field(default="", env="SOURCE")
-    openrouter_base_url: str = Field(
-        default="https://openrouter.ai/api/v1", env="BASE_URL"
-    )
 
     # Secrets / optional runtime controls
     provider_id: str = Field(default="", env="PROVIDER_ID")
-    nip91_provider_id: str = Field(default="", env="NIP91_PROVIDER_ID")
     nsec: str = Field(default="", env="NSEC")
 
-    # NIP-91
+    # Discovery
     relays: list[str] = Field(default_factory=list, env="RELAYS")
-    nip91_backoff_base_seconds: float = Field(
-        default=5.0, env="NIP91_BACKOFF_BASE_SECONDS"
-    )
-    nip91_backoff_max_seconds: float = Field(
-        default=900.0, env="NIP91_BACKOFF_MAX_SECONDS"
-    )
-    nip91_backoff_jitter_ratio: float = Field(
-        default=0.2, env="NIP91_BACKOFF_JITTER_RATIO"
-    )
-    nip91_announcement_interval: int = Field(
-        default=24 * 60 * 60, env="NIP91_ANNOUNCEMENT_INTERVAL"
-    )
 
 
 def _compute_primary_mint(cashu_mints: list[str]) -> str:

@@ -57,7 +57,7 @@ MODELS: list[Model] = []
 
 def fetch_openrouter_models(source_filter: str | None = None) -> list[dict]:
     """Fetches model information from OpenRouter API."""
-    base_url = settings.openrouter_base_url
+    base_url = "https://openrouter.ai/api/v1"
 
     try:
         with urlopen(f"{base_url}/models") as response:
