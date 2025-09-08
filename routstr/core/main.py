@@ -25,7 +25,7 @@ from .settings import settings as global_settings
 setup_logging()
 logger = get_logger(__name__)
 
-__version__ = "0.1.2"
+__version__ = "0.1.3-dev"
 
 
 @asynccontextmanager
