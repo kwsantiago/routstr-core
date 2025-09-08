@@ -134,6 +134,25 @@ def resolve_bootstrap() -> Settings:
                 base.onion_url = discovered
         except Exception:
             pass
+    # Derive NPUB from NSEC if not provided
+    if not base.npub and base.nsec:
+        try:
+            from nostr.key import PrivateKey  # type: ignore
+
+            if base.nsec.startswith("nsec"):
+                pk = PrivateKey.from_nsec(base.nsec)
+            elif len(base.nsec) == 64:
+                pk = PrivateKey(bytes.fromhex(base.nsec))
+            else:
+                pk = None
+            if pk is not None:
+                try:
+                    base.npub = pk.public_key.bech32()
+                except Exception:
+                    # Fallback to hex if bech32 not available
+                    base.npub = pk.public_key.hex()
+        except Exception:
+            pass
     if not base.cors_origins:
         base.cors_origins = ["*"]
     if not base.primary_mint:
