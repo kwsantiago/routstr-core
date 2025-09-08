@@ -19,6 +19,7 @@ from nostr.message_type import ClientMessageType
 from nostr.relay_manager import RelayManager
 
 from .core import get_logger
+from .core.settings import settings
 
 logger = get_logger(__name__)
 
@@ -286,7 +287,7 @@ def discover_onion_url_from_tor(base_dir: str = "/var/lib/tor") -> str | None:
 
 
 async def _determine_provider_id(public_key_hex: str, relay_urls: list[str]) -> str:
-    explicit = os.getenv("PROVIDER_ID") or os.getenv("NIP91_PROVIDER_ID")
+    explicit = settings.provider_id or settings.nip91_provider_id
     if explicit:
         logger.info(f"Using configured provider_id from env: {explicit}")
         return explicit
@@ -352,7 +353,7 @@ async def announce_provider() -> None:
     Checks for existing announcements and creates new ones if needed.
     """
     # Check for NSEC in environment (use NSEC only)
-    nsec = os.getenv("NSEC")
+    nsec = settings.nsec
     if not nsec:
         logger.info("Nostr private key not found (NSEC), skipping NIP-91 announcement")
         return
@@ -367,9 +368,10 @@ async def announce_provider() -> None:
     logger.info(f"Using Nostr pubkey: {public_key_hex}")
 
     # Configure relays first (RELAYS only)
-    relay_urls_env = os.getenv("RELAYS") or ""
-    logger.debug(f"Configured relays: {relay_urls_env}")
-    relay_urls = [url.strip() for url in relay_urls_env.split(",") if url.strip()]
+    try:
+        relay_urls = [u.strip() for u in settings.relays if u.strip()]
+    except Exception:
+        relay_urls = settings.relays
     if not relay_urls:
         relay_urls = [
             "wss://relay.nostr.band",
@@ -382,19 +384,23 @@ async def announce_provider() -> None:
     logger.info(f"Using provider_id: {provider_id}")
 
     # Core settings only (no ROUTSTR_* vars)
-    base_url = os.getenv("HTTP_URL")
-    onion_url = os.getenv("ONION_URL")
+    try:
+        base_url: str | None = settings.http_url
+        onion_url: str | None = settings.onion_url
+        provider_name = settings.name or "Routstr Proxy"
+        provider_about = settings.description or "Privacy-preserving AI proxy via Nostr"
+        cashu_mints = [m.strip() for m in settings.cashu_mints if m.strip()]
+    except Exception:
+        base_url = settings.http_url or None
+        onion_url = settings.onion_url or None
+        provider_name = settings.name or "Routstr Proxy"
+        provider_about = settings.description or "Privacy-preserving AI proxy via Nostr"
+        cashu_mints = [m.strip() for m in settings.cashu_mints if m.strip()]
     if not onion_url:
         discovered = discover_onion_url_from_tor()
         if discovered:
             onion_url = discovered
             logger.info(f"Discovered onion URL via Tor volume: {onion_url}")
-    provider_name = os.getenv("NAME", "Routstr Proxy")
-    provider_about = os.getenv("DESCRIPTION", "Privacy-preserving AI proxy via Nostr")
-    # Mint URLs optional: include all CASHU_MINTS entries if available
-    cashu_mints = [
-        m.strip() for m in os.getenv("CASHU_MINTS", "").split(",") if m.strip()
-    ]
     mint_urls = cashu_mints if cashu_mints else None
 
     # Build endpoint URLs (skip defaults like localhost)
@@ -433,9 +439,14 @@ async def announce_provider() -> None:
     )
 
     # Backoff configuration and state
-    backoff_base = float(os.getenv("NIP91_BACKOFF_BASE_SECONDS", "5"))
-    backoff_max = float(os.getenv("NIP91_BACKOFF_MAX_SECONDS", "900"))
-    backoff_jitter_ratio = float(os.getenv("NIP91_BACKOFF_JITTER_RATIO", "0.2"))
+    try:
+        backoff_base = settings.nip91_backoff_base_seconds
+        backoff_max = settings.nip91_backoff_max_seconds
+        backoff_jitter_ratio = settings.nip91_backoff_jitter_ratio
+    except Exception:
+        backoff_base = settings.nip91_backoff_base_seconds
+        backoff_max = settings.nip91_backoff_max_seconds
+        backoff_jitter_ratio = settings.nip91_backoff_jitter_ratio
     relay_next_allowed: dict[str, float] = {}
     relay_current_delay: dict[str, float] = {}
 
@@ -499,9 +510,10 @@ async def announce_provider() -> None:
         )
 
     # Re-announce periodically (every 24 hours)
-    announcement_interval = int(
-        os.getenv("NIP91_ANNOUNCEMENT_INTERVAL", str(24 * 60 * 60))
-    )
+    try:
+        announcement_interval = settings.nip91_announcement_interval
+    except Exception:
+        announcement_interval = settings.nip91_announcement_interval
 
     while True:
         try:
