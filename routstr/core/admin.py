@@ -366,13 +366,93 @@ async def dashboard(request: Request) -> str:
                     window.location.href = `/admin/logs/${{requestId}}`;
                 }}
 
+                async function openSettingsModal() {{
+                    const modal = document.getElementById('settings-modal');
+                    const textarea = document.getElementById('settings-json');
+                    const errorBox = document.getElementById('settings-error');
+                    errorBox.style.display = 'none';
+                    errorBox.textContent = '';
+                    try {{
+                        const resp = await fetch('/admin/api/settings', {{ credentials: 'same-origin' }});
+                        if (!resp.ok) {{
+                            throw new Error('HTTP ' + resp.status);
+                        }}
+                        const data = await resp.json();
+                        textarea.value = JSON.stringify(data, null, 2);
+                    }} catch (e) {{
+                        errorBox.style.display = 'block';
+                        errorBox.textContent = 'Failed to load settings: ' + e.message;
+                        textarea.value = '{{}}';
+                    }}
+                    modal.style.display = 'block';
+                }}
+
+                function closeSettingsModal() {{
+                    const modal = document.getElementById('settings-modal');
+                    modal.style.display = 'none';
+                }}
+
+                async function saveSettings() {{
+                    const textarea = document.getElementById('settings-json');
+                    const errorBox = document.getElementById('settings-error');
+                    errorBox.style.display = 'none';
+                    errorBox.style.color = '#e53e3e';
+                    let payload;
+                    try {{
+                        payload = JSON.parse(textarea.value);
+                    }} catch (e) {{
+                        errorBox.style.display = 'block';
+                        errorBox.textContent = 'Invalid JSON: ' + e.message;
+                        return;
+                    }}
+
+                    ['upstream_api_key', 'admin_password', 'nsec'].forEach(k => {{
+                        if (payload && payload[k] === '[REDACTED]') {{ delete payload[k]; }}
+                    }});
+
+                    try {{
+                        const resp = await fetch('/admin/api/settings', {{
+                            method: 'PATCH',
+                            headers: {{ 'Content-Type': 'application/json' }},
+                            credentials: 'same-origin',
+                            body: JSON.stringify(payload)
+                        }});
+                        if (resp.ok) {{
+                            const data = await resp.json();
+                            textarea.value = JSON.stringify(data, null, 2);
+                            errorBox.style.display = 'block';
+                            errorBox.style.color = '#22c55e';
+                            errorBox.textContent = 'Saved successfully';
+                            setTimeout(() => {{ errorBox.style.display = 'none'; }}, 2000);
+                        }} else {{
+                            let errText = 'Failed to save settings';
+                            try {{
+                                const err = await resp.json();
+                                if (err && err.detail) {{
+                                    errText = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+                                }}
+                            }} catch (_ignored) {{}}
+                            errorBox.style.display = 'block';
+                            errorBox.style.color = '#e53e3e';
+                            errorBox.textContent = errText;
+                        }}
+                    }} catch (e) {{
+                        errorBox.style.display = 'block';
+                        errorBox.style.color = '#e53e3e';
+                        errorBox.textContent = 'Request failed: ' + e.message;
+                    }}
+                }}
+
                 window.onclick = function(event) {{
                     const withdrawModal = document.getElementById('withdraw-modal');
                     const investigateModal = document.getElementById('investigate-modal');
+                    const settingsModal = document.getElementById('settings-modal');
                     if (event.target == withdrawModal) {{
                         closeWithdrawModal();
                     }} else if (event.target == investigateModal) {{
                         closeInvestigateModal();
+                    }} else if (event.target == settingsModal) {{
+                        closeSettingsModal();
                     }}
                 }}
             </script>
@@ -433,6 +513,9 @@ async def dashboard(request: Request) -> str:
             <button class="investigate-btn" onclick="openInvestigateModal()">
                 🔍 Investigate Logs
             </button>
+            <button onclick="openSettingsModal()">
+                ⚙️ Settings
+            </button>
             
             <div id="withdraw-modal" class="modal">
                 <div class="modal-content">
@@ -462,6 +545,20 @@ async def dashboard(request: Request) -> str:
                 </div>
             </div>
             
+            <div id="settings-modal" class="modal">
+                <div class="modal-content">
+                    <span class="close" onclick="closeSettingsModal()">&times;</span>
+                    <h3>Edit Settings (JSON)</h3>
+                    <p style="font-size: 0.9rem; color: #718096; margin-bottom: 8px;">Values shown as "[REDACTED]" will remain unchanged if left as-is.</p>
+                    <textarea id="settings-json" placeholder="{{}}" style="width: 100%; min-height: 280px; font-family: 'Monaco', monospace; font-size: 13px; background: #f8fafc; color: #2d3748; padding: 12px; border: 2px solid #e2e8f0; border-radius: 6px;"></textarea>
+                    <div id="settings-error" style="display: none; margin-top: 8px; font-size: 0.95rem; color: #e53e3e;"></div>
+                    <div style="margin-top: 12px; display: flex; gap: 10px;">
+                        <button onclick="saveSettings()">💾 Save</button>
+                        <button onclick="closeSettingsModal()" style="background-color: #718096;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
             <div id="investigate-modal" class="modal">
                 <div class="modal-content">
                     <span class="close" onclick="closeInvestigateModal()">&times;</span>
