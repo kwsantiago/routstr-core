@@ -7,10 +7,10 @@ from fastapi import BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
 from ..core import get_logger
+from ..core.settings import settings
 from ..wallet import recieve_token, send_token
 from .cost_caculation import CostData, CostDataError, MaxCostData, calculate_cost
 from .helpers import (
-    UPSTREAM_BASE_URL,
     create_error_response,
     prepare_upstream_headers,
     prepare_upstream_params,
@@ -109,7 +109,7 @@ async def forward_to_upstream(
     if path.startswith("v1/"):
         path = path.replace("v1/", "")
 
-    url = f"{UPSTREAM_BASE_URL}/{path}"
+    url = f"{settings.upstream_base_url}/{path}"
 
     logger.debug(
         "Forwarding request to upstream",
