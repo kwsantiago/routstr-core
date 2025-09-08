@@ -9,7 +9,6 @@ from pydantic import BaseModel
 from sqlmodel import select
 
 from ..wallet import (
-    TRUSTED_MINTS,
     fetch_all_balances,
     get_proofs_per_mint_and_unit,
     get_wallet,
@@ -18,10 +17,48 @@ from ..wallet import (
 )
 from .db import ApiKey, create_session
 from .logging import get_logger
+from .settings import SettingsService, settings
 
 logger = get_logger(__name__)
 
 admin_router = APIRouter(prefix="/admin", include_in_schema=False)
+
+
+@admin_router.get("/api/settings")
+async def get_settings(request: Request) -> dict:
+    admin_cookie = request.cookies.get("admin_password")
+    if not admin_cookie or admin_cookie != settings.admin_password:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    data = settings.dict()
+    if "upstream_api_key" in data:
+        data["upstream_api_key"] = "[REDACTED]" if data["upstream_api_key"] else ""
+    if "admin_password" in data:
+        data["admin_password"] = "[REDACTED]" if data["admin_password"] else ""
+    if "nsec" in data:
+        data["nsec"] = "[REDACTED]" if data["nsec"] else ""
+    return data
+
+
+class SettingsUpdate(BaseModel):
+    __root__: dict[str, object]
+
+
+@admin_router.patch("/api/settings")
+async def update_settings(request: Request, update: SettingsUpdate) -> dict:
+    admin_cookie = request.cookies.get("admin_password")
+    if not admin_cookie or admin_cookie != settings.admin_password:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    async with create_session() as session:
+        new_settings = await SettingsService.update(update.__root__, session)
+    data = new_settings.dict()
+    if "upstream_api_key" in data:
+        data["upstream_api_key"] = "[REDACTED]" if data["upstream_api_key"] else ""
+    if "admin_password" in data:
+        data["admin_password"] = "[REDACTED]" if data["admin_password"] else ""
+    if "nsec" in data:
+        data["nsec"] = "[REDACTED]" if data["nsec"] else ""
+    return data
 
 
 class WithdrawRequest(BaseModel):
@@ -87,7 +124,12 @@ def info(content: str) -> str:
 
 
 def admin_auth() -> str:
-    if os.getenv("ADMIN_PASSWORD", "") == "":
+    try:
+        settings = SettingsService.get()
+        admin_pw = settings.admin_password
+    except Exception:
+        admin_pw = os.getenv("ADMIN_PASSWORD", "")
+    if admin_pw == "":
         return info("Please set a secure ADMIN_PASSWORD= in your ENV variables.")
     else:
         return login_form()
@@ -454,7 +496,12 @@ async def dashboard(request: Request) -> str:
 @admin_router.get("/", response_class=HTMLResponse)
 async def admin(request: Request) -> str:
     admin_cookie = request.cookies.get("admin_password")
-    if admin_cookie and admin_cookie == os.getenv("ADMIN_PASSWORD"):
+    try:
+        settings = SettingsService.get()
+        admin_pw: str = settings.admin_password
+    except Exception:
+        admin_pw = os.getenv("ADMIN_PASSWORD", "") or ""
+    if admin_cookie and admin_cookie == admin_pw:
         return await dashboard(request)
     return admin_auth()
 
@@ -462,7 +509,12 @@ async def admin(request: Request) -> str:
 @admin_router.get("/logs/{request_id}", response_class=HTMLResponse)
 async def view_logs(request: Request, request_id: str) -> str:
     admin_cookie = request.cookies.get("admin_password")
-    if not admin_cookie or admin_cookie != os.getenv("ADMIN_PASSWORD"):
+    try:
+        settings = SettingsService.get()
+        admin_pw: str = settings.admin_password
+    except Exception:
+        admin_pw = os.getenv("ADMIN_PASSWORD", "") or ""
+    if not admin_cookie or admin_cookie != admin_pw:
         return admin_auth()
 
     logger.info(f"Investigating logs for request_id: {request_id}")
@@ -660,16 +712,23 @@ async def withdraw(
     request: Request, withdraw_request: WithdrawRequest
 ) -> dict[str, str]:
     admin_cookie = request.cookies.get("admin_password")
-    if not admin_cookie or admin_cookie != os.getenv("ADMIN_PASSWORD"):
+    try:
+        settings = SettingsService.get()
+        admin_pw: str = settings.admin_password
+    except Exception:
+        admin_pw = os.getenv("ADMIN_PASSWORD", "") or ""
+    if not admin_cookie or admin_cookie != admin_pw:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     # Get wallet and check balance
+    from .settings import settings as global_settings
+
     wallet = await get_wallet(
-        withdraw_request.mint_url or TRUSTED_MINTS[0], withdraw_request.unit
+        withdraw_request.mint_url or global_settings.primary_mint, withdraw_request.unit
     )
     proofs = get_proofs_per_mint_and_unit(
         wallet,
-        withdraw_request.mint_url or TRUSTED_MINTS[0],
+        withdraw_request.mint_url or global_settings.primary_mint,
         withdraw_request.unit,
         not_reserved=True,
     )
