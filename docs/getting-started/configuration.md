@@ -40,13 +40,13 @@ Routstr Core is configured via a single settings row in the database. Environmen
 | `EXCHANGE_FEE` | Exchange rate markup (1.005 = 0.5% fee) | `1.005` | ❌ |
 | `UPSTREAM_PROVIDER_FEE` | Provider fee markup (1.05 = 5% fee) | `1.05` | ❌ |
 
-### Network Configuration
+### Network & Discovery
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `CORS_ORIGINS` | Comma-separated list of allowed CORS origins | `*` | ❌ |
 | `TOR_PROXY_URL` | SOCKS5 proxy URL for Tor connections | `socks5://127.0.0.1:9050` | ❌ |
-| `RELAYS` | Comma-separated nostr relays for NIP-91 | defaults applied | ❌ |
+| `RELAYS` | Comma-separated nostr relays used for provider discovery | sane defaults | ❌ |
 | `PROVIDERS_REFRESH_INTERVAL_SECONDS` | Provider cache refresh interval | `300` | ❌ |
 
 ### Logging Configuration
