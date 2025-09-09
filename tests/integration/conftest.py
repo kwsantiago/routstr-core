@@ -509,6 +509,10 @@ async def integration_app(
         mint_url = os.environ.get("CASHU_MINTS", "http://localhost:3338")
         from routstr.core.settings import settings as _settings
 
+        # Passthrough discounted max cost to avoid dependence on MODELS in tests
+        def _passthrough_discount(max_cost_for_model: int, body: dict) -> int:
+            return max_cost_for_model
+
         with (
             patch("routstr.core.db.engine", integration_engine),
             patch.object(_settings, "cashu_mints", [mint_url]),
@@ -522,6 +526,10 @@ async def integration_app(
             patch("websockets.connect") as mock_websockets,
             patch("routstr.payment.price.btc_usd_ask_price", return_value=50000.0),
             patch("routstr.payment.price.sats_usd_ask_price", return_value=0.0005),
+            patch(
+                "routstr.payment.helpers.calculate_discounted_max_cost",
+                side_effect=_passthrough_discount,
+            ),
         ):
             # Configure the WebSocket mock for discovery service - fast failure for performance tests
             async def mock_websocket_connect(*args: Any, **kwargs: Any) -> None:
