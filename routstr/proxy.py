@@ -17,6 +17,7 @@ from .core import get_logger
 from .core.db import ApiKey, AsyncSession, create_session, get_session
 from .core.settings import settings
 from .payment.helpers import (
+    calculate_discounted_max_cost,
     check_token_balance,
     create_error_response,
     get_max_cost_for_model,
@@ -554,7 +555,10 @@ async def proxy(
             )
 
     model = request_body_dict.get("model", "unknown")
-    max_cost_for_model = get_max_cost_for_model(model=model)
+    _max_cost_for_model = get_max_cost_for_model(model=model)
+    max_cost_for_model = calculate_discounted_max_cost(
+        _max_cost_for_model, request_body_dict
+    )
     check_token_balance(headers, request_body_dict, max_cost_for_model)
 
     # Handle authentication

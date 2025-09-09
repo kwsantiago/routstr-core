@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     fixed_per_1k_output_tokens: int = Field(default=0, env="FIXED_PER_1K_OUTPUT_TOKENS")
     exchange_fee: float = Field(default=1.005, env="EXCHANGE_FEE")
     upstream_provider_fee: float = Field(default=1.05, env="UPSTREAM_PROVIDER_FEE")
+    tolerance_percentage: float = Field(default=1.0, env="TOLERANCE_PERCENTAGE")
 
     # Network
     cors_origins: list[str] = Field(default_factory=lambda: ["*"], env="CORS_ORIGINS")

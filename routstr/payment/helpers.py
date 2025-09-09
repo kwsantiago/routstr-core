@@ -1,4 +1,5 @@
 import json
+import math
 from typing import Mapping
 
 from fastapi import HTTPException, Response
@@ -7,7 +8,7 @@ from fastapi.requests import Request
 from ..core import get_logger
 from ..core.settings import settings
 from ..wallet import deserialize_token_from_string
-from .models import MODELS
+from .models import MODELS, Pricing
 
 logger = get_logger(__name__)
 
@@ -80,7 +81,7 @@ def check_token_balance(headers: dict, body: dict, max_cost_for_model: int) -> N
         )
 
 
-def get_max_cost_for_model(model: str, tolerance_percentage: int = 1) -> int:
+def get_max_cost_for_model(model: str) -> int:
     """Get the maximum cost for a specific model."""
     logger.debug(
         "Getting max cost for model",
@@ -115,7 +116,11 @@ def get_max_cost_for_model(model: str, tolerance_percentage: int = 1) -> int:
 
     for m in MODELS:
         if m.id == model:
-            max_cost = m.sats_pricing.max_cost * 1000 * (1 - tolerance_percentage / 100)  # type: ignore
+            max_cost = (
+                m.sats_pricing.max_cost  # type: ignore
+                * 1000
+                * (1 - settings.tolerance_percentage / 100)
+            )
             logger.debug(
                 "Found model-specific max cost",
                 extra={"model": model, "max_cost_msats": max_cost},
@@ -130,6 +135,83 @@ def get_max_cost_for_model(model: str, tolerance_percentage: int = 1) -> int:
         },
     )
     return settings.fixed_cost_per_request * 1000
+
+
+def calculate_discounted_max_cost(max_cost_for_model: int, body: dict) -> int:
+    """Calculate the discounted max cost for a request."""
+    original_max_cost_msats = max_cost_for_model
+    model = body.get("model", "unknown")
+
+    if settings.fixed_pricing:
+        return max_cost_for_model
+
+    if not (model_pricing := get_model_cost_info(model)):
+        return max_cost_for_model
+
+    tol = settings.tolerance_percentage
+    tol_factor = max(0.0, 1 - float(tol) / 100.0)
+    max_prompt_allowed_sats = model_pricing.max_prompt_cost * tol_factor
+    max_completion_allowed_sats = model_pricing.max_completion_cost * tol_factor
+
+    logger.debug(
+        "Discount estimation context",
+        extra={
+            "model": model,
+            "tolerance_pct": tol,
+            "tol_factor": tol_factor,
+            "start_max_cost_msats": original_max_cost_msats,
+            "model_max_cost_sats": model_pricing.max_cost,
+            "model_max_prompt_cost_sats": model_pricing.max_prompt_cost,
+            "model_max_completion_cost_sats": model_pricing.max_completion_cost,
+            "input_rate_sats_per_token": model_pricing.prompt,
+            "output_rate_sats_per_token": model_pricing.completion,
+            "max_prompt_allowed_sats": max_prompt_allowed_sats,
+            "max_completion_allowed_sats": max_completion_allowed_sats,
+        },
+    )
+
+    if messages := body.get("messages"):
+        prompt_tokens = estimate_tokens(messages)
+        estimated_prompt_delta_sats = (
+            max_prompt_allowed_sats - prompt_tokens * model_pricing.prompt
+        )
+        if estimated_prompt_delta_sats >= 0:
+            max_cost_for_model = max_cost_for_model - math.floor(
+                estimated_prompt_delta_sats * 1000
+            )
+        else:
+            max_cost_for_model = max_cost_for_model + math.ceil(
+                -estimated_prompt_delta_sats * 1000
+            )
+
+    if max_tokens := body.get("max_tokens"):
+        estimated_completion_delta_sats = (
+            max_completion_allowed_sats - max_tokens * model_pricing.completion
+        )
+        if estimated_completion_delta_sats >= 0:
+            max_cost_for_model = max_cost_for_model - math.floor(
+                estimated_completion_delta_sats * 1000
+            )
+        else:
+            max_cost_for_model = max_cost_for_model + math.ceil(
+                -estimated_completion_delta_sats * 1000
+            )
+
+    print("max_cost_for_model", max_cost_for_model)
+
+    return max(0, max_cost_for_model)
+
+
+def estimate_tokens(messages: list) -> int:
+    return len(str(messages)) // 3
+
+
+def get_model_cost_info(model_id: str) -> Pricing | None:
+    if not model_id or model_id == "unknown":
+        return None
+
+    model = next((m for m in MODELS if m.id == model_id), None)
+    return model.sats_pricing if model else None  # type: ignore
 
 
 def create_error_response(
