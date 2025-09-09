@@ -555,12 +555,9 @@ async def proxy(
             )
 
     model = request_body_dict.get("model", "unknown")
-    tolerance = settings.tolerance_percentage
-    _max_cost_for_model = get_max_cost_for_model(
-        model=model, tolerance_percentage=tolerance
-    )
+    _max_cost_for_model = get_max_cost_for_model(model=model)
     max_cost_for_model = calculate_discounted_max_cost(
-        _max_cost_for_model, request_body_dict, tolerance_percentage=tolerance
+        _max_cost_for_model, request_body_dict
     )
     check_token_balance(headers, request_body_dict, max_cost_for_model)
 

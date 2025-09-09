@@ -81,7 +81,7 @@ def check_token_balance(headers: dict, body: dict, max_cost_for_model: int) -> N
         )
 
 
-def get_max_cost_for_model(model: str, tolerance_percentage: float = 1.0) -> int:
+def get_max_cost_for_model(model: str) -> int:
     """Get the maximum cost for a specific model."""
     logger.debug(
         "Getting max cost for model",
@@ -116,7 +116,11 @@ def get_max_cost_for_model(model: str, tolerance_percentage: float = 1.0) -> int
 
     for m in MODELS:
         if m.id == model:
-            max_cost = m.sats_pricing.max_cost * 1000 * (1 - tolerance_percentage / 100)  # type: ignore
+            max_cost = (
+                m.sats_pricing.max_cost  # type: ignore
+                * 1000
+                * (1 - settings.tolerance_percentage / 100)
+            )
             logger.debug(
                 "Found model-specific max cost",
                 extra={"model": model, "max_cost_msats": max_cost},
@@ -133,9 +137,7 @@ def get_max_cost_for_model(model: str, tolerance_percentage: float = 1.0) -> int
     return settings.fixed_cost_per_request * 1000
 
 
-def calculate_discounted_max_cost(
-    max_cost_for_model: int, body: dict, tolerance_percentage: float | None = None
-) -> int:
+def calculate_discounted_max_cost(max_cost_for_model: int, body: dict) -> int:
     """Calculate the discounted max cost for a request."""
     if settings.fixed_pricing:
         return max_cost_for_model
@@ -148,11 +150,7 @@ def calculate_discounted_max_cost(
     print("model_pricing.max_prompt_cost", model_pricing.max_prompt_cost)
     print("model_pricing.max_completion_cost", model_pricing.max_completion_cost)
 
-    tol = (
-        settings.tolerance_percentage
-        if tolerance_percentage is None
-        else tolerance_percentage
-    )
+    tol = settings.tolerance_percentage
     tol_factor = max(0.0, 1 - float(tol) / 100.0)
     max_prompt_allowed_sats = model_pricing.max_prompt_cost * tol_factor
     max_completion_allowed_sats = model_pricing.max_completion_cost * tol_factor
