@@ -30,6 +30,8 @@ class Pricing(BaseModel):
     image: float
     web_search: float
     internal_reasoning: float
+    max_prompt_cost: float = 0.0  # in sats not msats
+    max_completion_cost: float = 0.0  # in sats not msats
     max_cost: float = 0.0  # in sats not msats
 
 
@@ -111,7 +113,7 @@ def load_models() -> list[Model]:
         try:
             with models_path.open("r") as f:
                 data = json.load(f)
-            return [Model(**model) for model in data.get("models", [])]
+            return [Model(**model) for model in data.get("models", [])]  # type: ignore
         except Exception as e:
             logger.error(f"Error loading models from {models_path}: {e}")
             # Fall through to auto-generation
@@ -130,7 +132,7 @@ def load_models() -> list[Model]:
         return []
 
     logger.info(f"Successfully fetched {len(models_data)} models from OpenRouter API")
-    return [Model(**model) for model in models_data]
+    return [Model(**model) for model in models_data]  # type: ignore
 
 
 MODELS = load_models()
@@ -143,26 +145,54 @@ async def update_sats_pricing() -> None:
             for model in MODELS:
                 model.sats_pricing = Pricing(
                     **{k: v / sats_to_usd for k, v in model.pricing.dict().items()}
-                )
+                )  # type: ignore
                 mspp = model.sats_pricing.prompt
                 mspc = model.sats_pricing.completion
                 if (tp := model.top_provider) and (
                     tp.context_length or tp.max_completion_tokens
                 ):
-                    if (cl := model.top_provider.context_length) and (
-                        mct := model.top_provider.max_completion_tokens
-                    ):
-                        model.sats_pricing.max_cost = (cl - mct) * mspp + mct * mspc
-                    elif cl := model.top_provider.context_length:
-                        model.sats_pricing.max_cost = cl * 0.8 * mspp + cl * 0.2 * mspc
-                    elif mct := model.top_provider.max_completion_tokens:
-                        model.sats_pricing.max_cost = mct * 4 * mspp + mct * mspc
+                    if (cl := tp.context_length) and (mct := tp.max_completion_tokens):
+                        max_prompt_cost = (cl - mct) * mspp
+                        max_completion_cost = mct * mspc
+                        model.sats_pricing.max_prompt_cost = max_prompt_cost
+                        model.sats_pricing.max_completion_cost = max_completion_cost
+                        model.sats_pricing.max_cost = (
+                            max_prompt_cost + max_completion_cost
+                        )
+                    elif cl := tp.context_length:
+                        max_prompt_cost = cl * 0.8 * mspp
+                        max_completion_cost = cl * 0.2 * mspc
+                        model.sats_pricing.max_prompt_cost = max_prompt_cost
+                        model.sats_pricing.max_completion_cost = max_completion_cost
+                        model.sats_pricing.max_cost = (
+                            max_prompt_cost + max_completion_cost
+                        )
+                    elif mct := tp.max_completion_tokens:
+                        max_prompt_cost = mct * 4 * mspp
+                        max_completion_cost = mct * mspc
+                        model.sats_pricing.max_prompt_cost = max_prompt_cost
+                        model.sats_pricing.max_completion_cost = max_completion_cost
+                        model.sats_pricing.max_cost = (
+                            max_prompt_cost + max_completion_cost
+                        )
                     else:
-                        model.sats_pricing.max_cost = 1_000_000 * mspp + 32_000 * mspc
+                        max_prompt_cost = 1_000_000 * mspp
+                        max_completion_cost = 32_000 * mspc
+                        model.sats_pricing.max_prompt_cost = max_prompt_cost
+                        model.sats_pricing.max_completion_cost = max_completion_cost
+                        model.sats_pricing.max_cost = (
+                            max_prompt_cost + max_completion_cost
+                        )
                 elif model.context_length:
-                    model.sats_pricing.max_cost = (
+                    max_prompt_cost = (
                         model.sats_pricing.prompt * model.context_length * 0.8
-                    ) + (model.sats_pricing.completion * model.context_length * 0.2)
+                    )
+                    max_completion_cost = (
+                        model.sats_pricing.completion * model.context_length * 0.2
+                    )
+                    model.sats_pricing.max_prompt_cost = max_prompt_cost
+                    model.sats_pricing.max_completion_cost = max_completion_cost
+                    model.sats_pricing.max_cost = max_prompt_cost + max_completion_cost
                 else:
                     p = model.sats_pricing.prompt * 1_000_000
                     c = model.sats_pricing.completion * 32_000
@@ -170,6 +200,8 @@ async def update_sats_pricing() -> None:
                     i = model.sats_pricing.image * 100
                     w = model.sats_pricing.web_search * 1000
                     ir = model.sats_pricing.internal_reasoning * 100
+                    model.sats_pricing.max_prompt_cost = p
+                    model.sats_pricing.max_completion_cost = c
                     model.sats_pricing.max_cost = p + c + r + i + w + ir
         except asyncio.CancelledError:
             break
