@@ -553,7 +553,7 @@ async def get_cost(
         extra={"model": model, "has_usage": "usage" in response_data},
     )
 
-    match calculate_cost(response_data, max_cost_for_model):
+    match await calculate_cost(response_data, max_cost_for_model, None):
         case MaxCostData() as cost:
             logger.debug(
                 "Using max cost pricing",
@@ -590,6 +590,7 @@ async def get_cost(
                     }
                 },
             )
+    return None
 
 
 async def send_refund(amount: int, unit: str, mint: str | None = None) -> str:

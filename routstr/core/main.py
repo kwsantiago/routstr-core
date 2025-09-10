@@ -10,7 +10,12 @@ from starlette.exceptions import HTTPException
 from ..balance import balance_router, deprecated_wallet_router
 from ..discovery import providers_cache_refresher, providers_router
 from ..nip91 import announce_provider
-from ..payment.models import MODELS, models_router, update_sats_pricing
+from ..payment.models import (
+    ensure_models_bootstrapped,
+    models_router,
+    update_sats_pricing,
+    refresh_models_periodically,
+)
 from ..proxy import proxy_router
 from ..wallet import periodic_payout
 from .admin import admin_router
@@ -36,6 +41,7 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     payout_task = None
     nip91_task = None
     providers_task = None
+    models_refresh_task = None
 
     try:
         # Run database migrations on startup
@@ -59,7 +65,10 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
         except Exception:
             pass
 
+        await ensure_models_bootstrapped()
         pricing_task = asyncio.create_task(update_sats_pricing())
+        if global_settings.models_refresh_interval_seconds > 0:
+            models_refresh_task = asyncio.create_task(refresh_models_periodically())
         payout_task = asyncio.create_task(periodic_payout())
         nip91_task = asyncio.create_task(announce_provider())
         providers_task = asyncio.create_task(providers_cache_refresher())
@@ -83,6 +92,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
             nip91_task.cancel()
         if providers_task is not None:
             providers_task.cancel()
+        if models_refresh_task is not None:
+            models_refresh_task.cancel()
 
         try:
             tasks_to_wait = []
@@ -94,6 +105,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
                 tasks_to_wait.append(nip91_task)
             if providers_task is not None:
                 tasks_to_wait.append(providers_task)
+            if models_refresh_task is not None:
+                tasks_to_wait.append(models_refresh_task)
 
             if tasks_to_wait:
                 await asyncio.gather(*tasks_to_wait, return_exceptions=True)
@@ -136,7 +149,7 @@ async def info() -> dict:
         "mints": global_settings.cashu_mints,
         "http_url": global_settings.http_url,
         "onion_url": global_settings.onion_url,
-        "models": MODELS,  # todo maybe remove models from here
+        "models": [],  # kept for back-compat; prefer /v1/models
     }
 
 

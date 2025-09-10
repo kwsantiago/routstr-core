@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     exchange_fee: float = Field(default=1.005, env="EXCHANGE_FEE")
     upstream_provider_fee: float = Field(default=1.05, env="UPSTREAM_PROVIDER_FEE")
     tolerance_percentage: float = Field(default=1.0, env="TOLERANCE_PERCENTAGE")
+    # Minimum per-request charge in millisatoshis when model pricing is free/zero
+    min_request_msat: int = Field(default=1, env="MIN_REQUEST_MSAT")
 
     # Network
     cors_origins: list[str] = Field(default_factory=lambda: ["*"], env="CORS_ORIGINS")
@@ -58,6 +60,17 @@ class Settings(BaseSettings):
     providers_refresh_interval_seconds: int = Field(
         default=300, env="PROVIDERS_REFRESH_INTERVAL_SECONDS"
     )
+    pricing_refresh_interval_seconds: int = Field(
+        default=120, env="PRICING_REFRESH_INTERVAL_SECONDS"
+    )
+    pricing_price_change_threshold: float = Field(
+        default=0.01, env="PRICING_PRICE_CHANGE_THRESHOLD"
+    )
+    models_refresh_interval_seconds: int = Field(
+        default=0, env="MODELS_REFRESH_INTERVAL_SECONDS"
+    )
+    enable_pricing_refresh: bool = Field(default=True, env="ENABLE_PRICING_REFRESH")
+    enable_models_refresh: bool = Field(default=True, env="ENABLE_MODELS_REFRESH")
     refund_cache_ttl_seconds: int = Field(default=3600, env="REFUND_CACHE_TTL_SECONDS")
 
     # Logging

@@ -422,7 +422,7 @@ async def adjust_payment_for_tokens(
         },
     )
 
-    match calculate_cost(response_data, deducted_max_cost):
+    match await calculate_cost(response_data, deducted_max_cost, session):
         case MaxCostData() as cost:
             logger.debug(
                 "Using max cost data (no token adjustment)",
@@ -633,3 +633,10 @@ async def adjust_payment_for_tokens(
                     }
                 },
             )
+    # Fallback return to satisfy type checker; execution should not reach here
+    return {
+        "base_msats": deducted_max_cost,
+        "input_msats": 0,
+        "output_msats": 0,
+        "total_msats": deducted_max_cost,
+    }
