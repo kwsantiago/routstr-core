@@ -154,25 +154,15 @@ async def get_max_cost_for_model(
     return max(settings.min_request_msat, settings.fixed_cost_per_request * 1000)
 
 
-def calculate_discounted_max_cost(
+async def calculate_discounted_max_cost(
     max_cost_for_model: int, body: dict, session: AsyncSession | None = None
 ) -> int:
-    """Calculate the discounted max cost for a request."""
-    original_max_cost_msats = max_cost_for_model
-    model = body.get("model", "unknown")
-
-    if settings.fixed_pricing:
+    """Calculate the discounted max cost for a request using model pricing when available."""
+    if settings.fixed_pricing or session is None:
         return max_cost_for_model
 
-    # Use DB session only if provided; otherwise keep base max-cost
-    model_pricing = None
-    # Intentionally do not resolve pricing without a session
-    if session is not None:
-        try:
-            # Caller should use DB-based flow for discounting; if not available, keep base cost
-            pass
-        except Exception:
-            pass
+    model = body.get("model", "unknown")
+    model_pricing = await get_model_cost_info(model, session=session)
     if not model_pricing:
         return max_cost_for_model
 
@@ -181,22 +171,7 @@ def calculate_discounted_max_cost(
     max_prompt_allowed_sats = model_pricing.max_prompt_cost * tol_factor
     max_completion_allowed_sats = model_pricing.max_completion_cost * tol_factor
 
-    logger.debug(
-        "Discount estimation context",
-        extra={
-            "model": model,
-            "tolerance_pct": tol,
-            "tol_factor": tol_factor,
-            "start_max_cost_msats": original_max_cost_msats,
-            "model_max_cost_sats": model_pricing.max_cost,
-            "model_max_prompt_cost_sats": model_pricing.max_prompt_cost,
-            "model_max_completion_cost_sats": model_pricing.max_completion_cost,
-            "input_rate_sats_per_token": model_pricing.prompt,
-            "output_rate_sats_per_token": model_pricing.completion,
-            "max_prompt_allowed_sats": max_prompt_allowed_sats,
-            "max_completion_allowed_sats": max_completion_allowed_sats,
-        },
-    )
+    adjusted = max_cost_for_model
 
     if messages := body.get("messages"):
         prompt_tokens = estimate_tokens(messages)
@@ -204,28 +179,30 @@ def calculate_discounted_max_cost(
             max_prompt_allowed_sats - prompt_tokens * model_pricing.prompt
         )
         if estimated_prompt_delta_sats >= 0:
-            max_cost_for_model = max_cost_for_model - math.floor(
-                estimated_prompt_delta_sats * 1000
-            )
+            adjusted = adjusted - math.floor(estimated_prompt_delta_sats * 1000)
         else:
-            max_cost_for_model = max_cost_for_model + math.ceil(
-                -estimated_prompt_delta_sats * 1000
-            )
+            adjusted = adjusted + math.ceil(-estimated_prompt_delta_sats * 1000)
 
     if max_tokens := body.get("max_tokens"):
         estimated_completion_delta_sats = (
             max_completion_allowed_sats - max_tokens * model_pricing.completion
         )
         if estimated_completion_delta_sats >= 0:
-            max_cost_for_model = max_cost_for_model - math.floor(
-                estimated_completion_delta_sats * 1000
-            )
+            adjusted = adjusted - math.floor(estimated_completion_delta_sats * 1000)
         else:
-            max_cost_for_model = max_cost_for_model + math.ceil(
-                -estimated_completion_delta_sats * 1000
-            )
+            adjusted = adjusted + math.ceil(-estimated_completion_delta_sats * 1000)
 
-    return max(0, max_cost_for_model)
+    logger.debug(
+        "Discounted max cost computed",
+        extra={
+            "model": model,
+            "original_msats": max_cost_for_model,
+            "adjusted_msats": adjusted,
+            "tolerance_pct": tol,
+        },
+    )
+
+    return max(0, adjusted)
 
 
 def estimate_tokens(messages: list) -> int:

@@ -13,8 +13,8 @@ from ..nip91 import announce_provider
 from ..payment.models import (
     ensure_models_bootstrapped,
     models_router,
-    update_sats_pricing,
     refresh_models_periodically,
+    update_sats_pricing,
 )
 from ..proxy import proxy_router
 from ..wallet import periodic_payout

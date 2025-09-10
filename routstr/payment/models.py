@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 from pathlib import Path
 from urllib.request import urlopen
 
@@ -372,8 +373,8 @@ async def update_sats_pricing() -> None:
             logger.error(f"Error updating sats pricing: {e}")
         try:
             interval = getattr(settings, "pricing_refresh_interval_seconds", 120)
-            jitter = max(1, int(interval * 0.1))
-            await asyncio.sleep(interval + (asyncio.get_running_loop().time() % jitter))
+            jitter = max(0.0, float(interval) * 0.1)
+            await asyncio.sleep(interval + random.uniform(0, jitter))
         except asyncio.CancelledError:
             break
 
@@ -437,8 +438,8 @@ async def refresh_models_periodically() -> None:
                 extra={"error": str(e), "error_type": type(e).__name__},
             )
         try:
-            jitter = max(1, int(interval * 0.1))
-            await asyncio.sleep(interval + (asyncio.get_running_loop().time() % jitter))
+            jitter = max(0.0, float(interval) * 0.1)
+            await asyncio.sleep(interval + random.uniform(0, jitter))
         except asyncio.CancelledError:
             break
 

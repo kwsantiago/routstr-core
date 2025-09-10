@@ -556,7 +556,7 @@ async def proxy(
 
     model = request_body_dict.get("model", "unknown")
     _max_cost_for_model = await get_max_cost_for_model(model=model, session=session)
-    max_cost_for_model = calculate_discounted_max_cost(
+    max_cost_for_model = await calculate_discounted_max_cost(
         _max_cost_for_model, request_body_dict, session
     )
     check_token_balance(headers, request_body_dict, max_cost_for_model)
