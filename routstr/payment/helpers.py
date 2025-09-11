@@ -4,11 +4,14 @@ from typing import Mapping
 
 from fastapi import HTTPException, Response
 from fastapi.requests import Request
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ..core import get_logger
+from ..core.db import ModelRow
 from ..core.settings import settings
 from ..wallet import deserialize_token_from_string
-from .models import MODELS, Pricing
+from .models import Pricing
 
 logger = get_logger(__name__)
 
@@ -81,14 +84,16 @@ def check_token_balance(headers: dict, body: dict, max_cost_for_model: int) -> N
         )
 
 
-def get_max_cost_for_model(model: str) -> int:
+async def get_max_cost_for_model(
+    model: str, session: AsyncSession | None = None
+) -> int:
     """Get the maximum cost for a specific model."""
     logger.debug(
         "Getting max cost for model",
         extra={
             "model": model,
             "fixed_pricing": settings.fixed_pricing,
-            "has_models": bool(MODELS),
+            "has_models": True,
         },
     )
 
@@ -99,33 +104,45 @@ def get_max_cost_for_model(model: str) -> int:
             "Using fixed cost pricing",
             extra={"cost_msats": default_cost_msats, "model": model},
         )
-        return default_cost_msats
+        return max(settings.min_request_msat, default_cost_msats)
 
-    if model not in [model.id for model in MODELS]:
+    if session is None:
+        # Without a DB session, we can't resolve model pricing; fall back to fixed cost
+        fallback_msats = settings.fixed_cost_per_request * 1000
+        logger.warning(
+            "No DB session provided for model pricing; using fixed cost",
+            extra={"requested_model": model, "using_default_cost": fallback_msats},
+        )
+        return max(settings.min_request_msat, fallback_msats)
+
+    result = await session.exec(select(ModelRow.id))  # type: ignore
+    available_ids = [row[0] if isinstance(row, tuple) else row for row in result.all()]
+    if model not in available_ids:
         # If no models or unknown model, fall back to fixed cost if provided, else minimal default
         fallback_msats = settings.fixed_cost_per_request * 1000
         logger.warning(
             "Model not found in available models",
             extra={
                 "requested_model": model,
-                "available_models": [m.id for m in MODELS],
+                "available_models": available_ids,
                 "using_default_cost": fallback_msats,
             },
         )
-        return fallback_msats
+        return max(settings.min_request_msat, fallback_msats)
 
-    for m in MODELS:
-        if m.id == model:
-            max_cost = (
-                m.sats_pricing.max_cost  # type: ignore
-                * 1000
-                * (1 - settings.tolerance_percentage / 100)
-            )
+    row = await session.get(ModelRow, model)
+    if row and row.sats_pricing:
+        try:
+            sats = Pricing(**json.loads(row.sats_pricing))  # type: ignore
+            max_cost = sats.max_cost * 1000 * (1 - settings.tolerance_percentage / 100)
             logger.debug(
                 "Found model-specific max cost",
                 extra={"model": model, "max_cost_msats": max_cost},
             )
-            return int(max_cost)
+            calculated_msats = int(max_cost)
+            return max(settings.min_request_msat, calculated_msats)
+        except Exception:
+            pass
 
     logger.warning(
         "Model pricing not found, using fixed cost",
@@ -134,18 +151,19 @@ def get_max_cost_for_model(model: str) -> int:
             "default_cost_msats": settings.fixed_cost_per_request * 1000,
         },
     )
-    return settings.fixed_cost_per_request * 1000
+    return max(settings.min_request_msat, settings.fixed_cost_per_request * 1000)
 
 
-def calculate_discounted_max_cost(max_cost_for_model: int, body: dict) -> int:
-    """Calculate the discounted max cost for a request."""
-    original_max_cost_msats = max_cost_for_model
-    model = body.get("model", "unknown")
-
-    if settings.fixed_pricing:
+async def calculate_discounted_max_cost(
+    max_cost_for_model: int, body: dict, session: AsyncSession | None = None
+) -> int:
+    """Calculate the discounted max cost for a request using model pricing when available."""
+    if settings.fixed_pricing or session is None:
         return max_cost_for_model
 
-    if not (model_pricing := get_model_cost_info(model)):
+    model = body.get("model", "unknown")
+    model_pricing = await get_model_cost_info(model, session=session)
+    if not model_pricing:
         return max_cost_for_model
 
     tol = settings.tolerance_percentage
@@ -153,22 +171,7 @@ def calculate_discounted_max_cost(max_cost_for_model: int, body: dict) -> int:
     max_prompt_allowed_sats = model_pricing.max_prompt_cost * tol_factor
     max_completion_allowed_sats = model_pricing.max_completion_cost * tol_factor
 
-    logger.debug(
-        "Discount estimation context",
-        extra={
-            "model": model,
-            "tolerance_pct": tol,
-            "tol_factor": tol_factor,
-            "start_max_cost_msats": original_max_cost_msats,
-            "model_max_cost_sats": model_pricing.max_cost,
-            "model_max_prompt_cost_sats": model_pricing.max_prompt_cost,
-            "model_max_completion_cost_sats": model_pricing.max_completion_cost,
-            "input_rate_sats_per_token": model_pricing.prompt,
-            "output_rate_sats_per_token": model_pricing.completion,
-            "max_prompt_allowed_sats": max_prompt_allowed_sats,
-            "max_completion_allowed_sats": max_completion_allowed_sats,
-        },
-    )
+    adjusted = max_cost_for_model
 
     if messages := body.get("messages"):
         prompt_tokens = estimate_tokens(messages)
@@ -176,42 +179,50 @@ def calculate_discounted_max_cost(max_cost_for_model: int, body: dict) -> int:
             max_prompt_allowed_sats - prompt_tokens * model_pricing.prompt
         )
         if estimated_prompt_delta_sats >= 0:
-            max_cost_for_model = max_cost_for_model - math.floor(
-                estimated_prompt_delta_sats * 1000
-            )
+            adjusted = adjusted - math.floor(estimated_prompt_delta_sats * 1000)
         else:
-            max_cost_for_model = max_cost_for_model + math.ceil(
-                -estimated_prompt_delta_sats * 1000
-            )
+            adjusted = adjusted + math.ceil(-estimated_prompt_delta_sats * 1000)
 
     if max_tokens := body.get("max_tokens"):
         estimated_completion_delta_sats = (
             max_completion_allowed_sats - max_tokens * model_pricing.completion
         )
         if estimated_completion_delta_sats >= 0:
-            max_cost_for_model = max_cost_for_model - math.floor(
-                estimated_completion_delta_sats * 1000
-            )
+            adjusted = adjusted - math.floor(estimated_completion_delta_sats * 1000)
         else:
-            max_cost_for_model = max_cost_for_model + math.ceil(
-                -estimated_completion_delta_sats * 1000
-            )
+            adjusted = adjusted + math.ceil(-estimated_completion_delta_sats * 1000)
 
-    print("max_cost_for_model", max_cost_for_model)
+    logger.debug(
+        "Discounted max cost computed",
+        extra={
+            "model": model,
+            "original_msats": max_cost_for_model,
+            "adjusted_msats": adjusted,
+            "tolerance_pct": tol,
+        },
+    )
 
-    return max(0, max_cost_for_model)
+    return max(0, adjusted)
 
 
 def estimate_tokens(messages: list) -> int:
     return len(str(messages)) // 3
 
 
-def get_model_cost_info(model_id: str) -> Pricing | None:
+async def get_model_cost_info(
+    model_id: str, session: AsyncSession | None = None
+) -> Pricing | None:
     if not model_id or model_id == "unknown":
         return None
-
-    model = next((m for m in MODELS if m.id == model_id), None)
-    return model.sats_pricing if model else None  # type: ignore
+    if session is None:
+        return None
+    row = await session.get(ModelRow, model_id)
+    if row and row.sats_pricing:
+        try:
+            return Pricing(**json.loads(row.sats_pricing))  # type: ignore
+        except Exception:
+            return None
+    return None
 
 
 def create_error_response(
