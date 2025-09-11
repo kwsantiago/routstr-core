@@ -35,72 +35,6 @@ def is_admin_authenticated(request: Request) -> bool:
     return bool(admin_cookie and admin_cookie == settings.admin_password)
 
 
-DASHBOARD_CSS: str = """
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f7fa; color: #2c3e50; line-height: 1.6; padding: 2rem; }
-h1, h2 { margin-bottom: 1rem; color: #1a202c; }
-h1 { font-size: 2rem; }
-h2 { font-size: 1.5rem; margin-top: 2rem; }
-p { margin-bottom: 0.5rem; color: #4a5568; }
-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-top: 1rem; }
-th { background: #4a5568; color: white; font-weight: 600; padding: 12px; text-align: left; }
-td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
-tr:hover { background: #f7fafc; }
-button { padding: 10px 20px; cursor: pointer; background: #4299e1; color: white; border: none; border-radius: 6px; font-weight: 600; margin-right: 10px; transition: all 0.2s; }
-button:hover { background: #3182ce; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-button:disabled { background: #a0aec0; cursor: not-allowed; transform: none; }
-.refresh-btn { background: #48bb78; }
-.refresh-btn:hover { background: #38a169; }
-.investigate-btn { background: #4299e1; }
-.balance-card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; }
-.balance-item { display: flex; justify-content: space-between; margin-bottom: 1rem; }
-.balance-label { color: #718096; }
-.balance-value { font-size: 1.5rem; font-weight: 700; color: #2d3748; }
-.balance-primary { color: #48bb78; }
-.currency-grid { margin-top: 1rem; font-size: 0.9rem; }
-.currency-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid #f0f0f0; align-items: center; }
-.currency-row:last-child { border-bottom: none; }
-.currency-header { font-weight: 600; color: #4a5568; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }
-.mint-name { color: #2d3748; font-size: 0.85rem; word-break: break-all; }
-.balance-num { text-align: right; font-family: monospace; }
-.owner-positive { color: #22c55e; }
-.error-row { color: #dc2626; font-style: italic; }
-#token-result { margin-top: 20px; padding: 20px; background: #e6fffa; border: 1px solid #38b2ac; border-radius: 8px; display: none; }
-#token-text { font-family: 'Monaco', monospace; font-size: 13px; background: #2d3748; color: #68d391; padding: 15px; border-radius: 6px; margin: 10px 0; word-break: break-all; }
-.copy-btn { background: #38a169; padding: 6px 12px; font-size: 14px; }
-.copy-btn:hover { background: #2f855a; }
-.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
-.modal-content { background: white; margin: 10% auto; padding: 2rem; width: 90%; max-width: 400px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); animation: slideIn 0.3s ease; }
-@keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-.close { color: #a0aec0; float: right; font-size: 28px; font-weight: bold; cursor: pointer; margin: -10px -10px 0 0; }
-.close:hover { color: #2d3748; }
-input[type="number"], input[type="text"], select { width: 100%; padding: 10px; margin: 10px 0; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 16px; transition: border 0.2s; }
-input[type="number"]:focus, input[type="text"]:focus, select:focus { outline: none; border-color: #4299e1; }
-.warning { color: #e53e3e; font-weight: 600; margin: 10px 0; padding: 10px; background: #fff5f5; border-radius: 6px; }
-"""
-
-
-LOGS_CSS: str = """
-body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
-h1 { color: #333; }
-.back-btn { padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-bottom: 20px; }
-.back-btn:hover { background-color: #0056b3; }
-.log-container { background-color: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; max-height: 80vh; overflow-y: auto; }
-.log-entry { margin-bottom: 15px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 12px; background-color: #f9f9f9; }
-.log-entry.log-error { background-color: #fee; border-color: #fcc; }
-.log-entry.log-warning { background-color: #ffc; border-color: #ff9; }
-.log-entry.log-debug, .log-entry.log-trace { background-color: #f0f0f0; border-color: #ccc; }
-.log-header { margin-bottom: 5px; color: #666; }
-.log-timestamp { color: #0066cc; }
-.log-level { font-weight: bold; }
-.log-message { margin: 5px 0; color: #333; }
-.log-extra { margin-top: 5px; padding-top: 5px; border-top: 1px solid #e0e0e0; }
-.log-field { margin: 2px 0; color: #666; word-break: break-all; }
-.no-logs { text-align: center; color: #666; padding: 40px; }
-.request-id-display { background-color: #e9ecef; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-family: monospace; }
-"""
-
-
 @admin_router.get(
     "/partials/balances",
     dependencies=[Depends(require_admin_api)],
@@ -764,7 +698,7 @@ async def view_logs(request: Request, request_id: str) -> str:
             </head>
             </head>
         """
-        + """<!--html-->
+        + f"""<!--html-->
         <body>
             <a href="/admin" class="back-btn">← Back to Dashboard</a>
             <h1>Log Investigation</h1>
@@ -814,3 +748,69 @@ async def withdraw(
         withdraw_request.amount, withdraw_request.unit, withdraw_request.mint_url
     )
     return {"token": token}
+
+
+DASHBOARD_CSS: str = """
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f7fa; color: #2c3e50; line-height: 1.6; padding: 2rem; }
+h1, h2 { margin-bottom: 1rem; color: #1a202c; }
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; margin-top: 2rem; }
+p { margin-bottom: 0.5rem; color: #4a5568; }
+table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-top: 1rem; }
+th { background: #4a5568; color: white; font-weight: 600; padding: 12px; text-align: left; }
+td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+tr:hover { background: #f7fafc; }
+button { padding: 10px 20px; cursor: pointer; background: #4299e1; color: white; border: none; border-radius: 6px; font-weight: 600; margin-right: 10px; transition: all 0.2s; }
+button:hover { background: #3182ce; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+button:disabled { background: #a0aec0; cursor: not-allowed; transform: none; }
+.refresh-btn { background: #48bb78; }
+.refresh-btn:hover { background: #38a169; }
+.investigate-btn { background: #4299e1; }
+.balance-card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+.balance-item { display: flex; justify-content: space-between; margin-bottom: 1rem; }
+.balance-label { color: #718096; }
+.balance-value { font-size: 1.5rem; font-weight: 700; color: #2d3748; }
+.balance-primary { color: #48bb78; }
+.currency-grid { margin-top: 1rem; font-size: 0.9rem; }
+.currency-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid #f0f0f0; align-items: center; }
+.currency-row:last-child { border-bottom: none; }
+.currency-header { font-weight: 600; color: #4a5568; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }
+.mint-name { color: #2d3748; font-size: 0.85rem; word-break: break-all; }
+.balance-num { text-align: right; font-family: monospace; }
+.owner-positive { color: #22c55e; }
+.error-row { color: #dc2626; font-style: italic; }
+#token-result { margin-top: 20px; padding: 20px; background: #e6fffa; border: 1px solid #38b2ac; border-radius: 8px; display: none; }
+#token-text { font-family: 'Monaco', monospace; font-size: 13px; background: #2d3748; color: #68d391; padding: 15px; border-radius: 6px; margin: 10px 0; word-break: break-all; }
+.copy-btn { background: #38a169; padding: 6px 12px; font-size: 14px; }
+.copy-btn:hover { background: #2f855a; }
+.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+.modal-content { background: white; margin: 10% auto; padding: 2rem; width: 90%; max-width: 400px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); animation: slideIn 0.3s ease; }
+@keyframes slideIn { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.close { color: #a0aec0; float: right; font-size: 28px; font-weight: bold; cursor: pointer; margin: -10px -10px 0 0; }
+.close:hover { color: #2d3748; }
+input[type="number"], input[type="text"], select { width: 100%; padding: 10px; margin: 10px 0; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 16px; transition: border 0.2s; }
+input[type="number"]:focus, input[type="text"]:focus, select:focus { outline: none; border-color: #4299e1; }
+.warning { color: #e53e3e; font-weight: 600; margin: 10px 0; padding: 10px; background: #fff5f5; border-radius: 6px; }
+"""
+
+
+LOGS_CSS: str = """
+body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+h1 { color: #333; }
+.back-btn { padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-bottom: 20px; }
+.back-btn:hover { background-color: #0056b3; }
+.log-container { background-color: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; max-height: 80vh; overflow-y: auto; }
+.log-entry { margin-bottom: 15px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 12px; background-color: #f9f9f9; }
+.log-entry.log-error { background-color: #fee; border-color: #fcc; }
+.log-entry.log-warning { background-color: #ffc; border-color: #ff9; }
+.log-entry.log-debug, .log-entry.log-trace { background-color: #f0f0f0; border-color: #ccc; }
+.log-header { margin-bottom: 5px; color: #666; }
+.log-timestamp { color: #0066cc; }
+.log-level { font-weight: bold; }
+.log-message { margin: 5px 0; color: #333; }
+.log-extra { margin-top: 5px; padding-top: 5px; border-top: 1px solid #e0e0e0; }
+.log-field { margin: 2px 0; color: #666; word-break: break-all; }
+.no-logs { text-align: center; color: #666; padding: 40px; }
+.request-id-display { background-color: #e9ecef; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-family: monospace; }
+"""
