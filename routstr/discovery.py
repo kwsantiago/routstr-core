@@ -205,6 +205,7 @@ def _get_discovery_relays() -> list[str]:
             "wss://relay.nostr.band",
             "wss://relay.damus.io",
             "wss://relay.routstr.com",
+            "wss://nos.lol",
         ]
     return relays
 
