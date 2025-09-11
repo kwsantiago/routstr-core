@@ -260,7 +260,7 @@ async def dashboard(request: Request) -> str:
                         const select = document.getElementById('mint-unit-select');
                         select.innerHTML = '';
                         balanceDetails
-                            .filter(d => !d.error && d.owner_balance > 0)
+                            .filter(d => !d.error && d.wallet_balance > 0)
                             .forEach(d => {
                                 const opt = document.createElement('option');
                                 opt.value = `${d.mint_url}|${d.unit}`;
