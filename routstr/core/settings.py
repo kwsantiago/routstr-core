@@ -63,9 +63,6 @@ class Settings(BaseSettings):
     pricing_refresh_interval_seconds: int = Field(
         default=120, env="PRICING_REFRESH_INTERVAL_SECONDS"
     )
-    pricing_price_change_threshold: float = Field(
-        default=0.01, env="PRICING_PRICE_CHANGE_THRESHOLD"
-    )
     models_refresh_interval_seconds: int = Field(
         default=0, env="MODELS_REFRESH_INTERVAL_SECONDS"
     )
