@@ -65,6 +65,7 @@ async def wallet_info(key: ApiKey = Depends(get_key_from_header)) -> dict:
     return {
         "api_key": "sk-" + key.hashed_key,
         "balance": key.balance,
+        "reserved": key.reserved_balance,
     }
 
 
