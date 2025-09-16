@@ -183,14 +183,23 @@ async def calculate_discounted_max_cost(
         else:
             adjusted = adjusted + math.ceil(-estimated_prompt_delta_sats * 1000)
 
-    if max_tokens := body.get("max_tokens"):
-        estimated_completion_delta_sats = (
-            max_completion_allowed_sats - max_tokens * model_pricing.completion
-        )
-        if estimated_completion_delta_sats >= 0:
-            adjusted = adjusted - math.floor(estimated_completion_delta_sats * 1000)
+    max_tokens_raw = body.get("max_tokens", None)
+    if max_tokens_raw is not None:
+        try:
+            max_tokens_int = int(max_tokens_raw)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid max_tokens; ignoring in cost adjustment",
+                extra={"max_tokens": str(max_tokens_raw)[:64], "model": model},
+            )
         else:
-            adjusted = adjusted + math.ceil(-estimated_completion_delta_sats * 1000)
+            estimated_completion_delta_sats = (
+                max_completion_allowed_sats - max_tokens_int * model_pricing.completion
+            )
+            if estimated_completion_delta_sats >= 0:
+                adjusted = adjusted - math.floor(estimated_completion_delta_sats * 1000)
+            else:
+                adjusted = adjusted + math.ceil(-estimated_completion_delta_sats * 1000)
 
     logger.debug(
         "Discounted max cost computed",
