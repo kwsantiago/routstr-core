@@ -158,6 +158,11 @@ async def admin_redirect() -> RedirectResponse:
     return RedirectResponse("/admin/")
 
 
+@app.get("/v1/providers")
+async def providers() -> RedirectResponse:
+    return RedirectResponse("/v1/providers/")
+
+
 app.include_router(models_router)
 app.include_router(admin_router)
 app.include_router(balance_router)
