@@ -94,6 +94,14 @@ def fetch_openrouter_models(source_filter: str | None = None) -> list[dict]:
         return []
 
 
+def is_openrouter_upstream() -> bool:
+    try:
+        base = (settings.upstream_base_url or "").strip().rstrip("/")
+    except Exception:
+        return False
+    return base.lower() == "https://openrouter.ai/api/v1"
+
+
 def load_models() -> list[Model]:
     """Load model definitions from a JSON file or auto-generate from OpenRouter API.
 
@@ -119,7 +127,13 @@ def load_models() -> list[Model]:
             logger.error(f"Error loading models from {models_path}: {e}")
             # Fall through to auto-generation
 
-    # Auto-generate models from OpenRouter API
+    # Only auto-generate from OpenRouter when upstream is OpenRouter
+    if not is_openrouter_upstream():
+        logger.info(
+            "Skipping auto-generation from OpenRouter because upstream_base_url is not https://openrouter.ai/api/v1"
+        )
+        return []
+
     logger.info("Auto-generating models from OpenRouter API")
     try:
         source_filter = settings.source or None
@@ -240,7 +254,7 @@ async def ensure_models_bootstrapped() -> None:
             except Exception as e:
                 logger.error(f"Error loading models from {models_path}: {e}")
 
-        if not models_to_insert:
+        if not models_to_insert and is_openrouter_upstream():
             logger.info("Bootstrapping models from OpenRouter API")
             source_filter = None
             try:
@@ -249,6 +263,10 @@ async def ensure_models_bootstrapped() -> None:
             except Exception:
                 pass
             models_to_insert = fetch_openrouter_models(source_filter=source_filter)
+        elif not models_to_insert:
+            logger.info(
+                "No models.json found and upstream is not OpenRouter; skipping bootstrap"
+            )
 
         for m in models_to_insert:
             try:
@@ -388,6 +406,11 @@ async def refresh_models_periodically() -> None:
     """
     interval = getattr(settings, "models_refresh_interval_seconds", 0)
     if not interval or interval <= 0:
+        return
+
+    # Only refresh from OpenRouter when upstream is OpenRouter
+    if not is_openrouter_upstream():
+        logger.info("Skipping models refresh: upstream_base_url is not OpenRouter")
         return
 
     while True:
