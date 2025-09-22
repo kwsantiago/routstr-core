@@ -83,6 +83,9 @@ def fetch_openrouter_models(source_filter: str | None = None) -> list[dict]:
                     "(free)" in model.get("name", "")
                     or model_id == "openrouter/auto"
                     or model_id == "google/gemini-2.5-pro-exp-03-25"
+                    or model_id == "opengvlab/internvl3-78b"
+                    or model_id == "openrouter/sonoma-dusk-alpha"
+                    or model_id == "openrouter/sonoma-sky-alpha"
                 ):
                     continue
 
