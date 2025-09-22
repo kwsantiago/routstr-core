@@ -164,6 +164,28 @@ async def update_settings(request: Request, update: SettingsUpdate) -> dict:
     return data
 
 
+class SetupRequest(BaseModel):
+    password: str
+
+
+@admin_router.post("/api/setup")
+async def initial_setup(request: Request, payload: SetupRequest) -> dict[str, object]:
+    try:
+        current = SettingsService.get()
+    except Exception:
+        current = settings
+    if getattr(current, "admin_password", ""):
+        raise HTTPException(status_code=409, detail="Admin password already set")
+    pw = (payload.password or "").strip()
+    if len(pw) < 8:
+        raise HTTPException(
+            status_code=400, detail="Password must be at least 8 characters"
+        )
+    async with create_session() as session:
+        await SettingsService.update({"admin_password": pw}, session)
+    return {"ok": True}
+
+
 class WithdrawRequest(BaseModel):
     amount: int
     mint_url: str | None = None
@@ -206,6 +228,67 @@ def login_form() -> str:
     """
 
 
+def setup_form() -> str:
+    return """<!DOCTYPE html>
+    <html>
+        <head>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f5f7fa; }
+                .setup-card { background: white; padding: 2.5rem; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 360px; }
+                h2 { margin-bottom: 1.25rem; color: #1a202c; text-align: center; }
+                p { color: #4a5568; font-size: 0.95rem; margin-bottom: 1rem; text-align: center; }
+                input[type="password"] { width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 16px; transition: border 0.2s; }
+                input[type="password"]:focus { outline: none; border-color: #4299e1; }
+                button { width: 100%; padding: 12px; margin-top: 1rem; background: #4299e1; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+                button:hover { background: #3182ce; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                .error { color: #e53e3e; margin-top: 10px; text-align: center; }
+            </style>
+            <script>
+                async function handleSetupSubmit(e) {
+                    e.preventDefault();
+                    const pw = document.getElementById('password').value;
+                    const pw2 = document.getElementById('password2').value;
+                    const err = document.getElementById('error');
+                    err.textContent = '';
+                    if (pw.length < 8) { err.textContent = 'Password must be at least 8 characters'; return; }
+                    if (pw !== pw2) { err.textContent = 'Passwords do not match'; return; }
+                    try {
+                        const resp = await fetch('/admin/api/setup', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({ password: pw })
+                        });
+                        if (!resp.ok) {
+                            let msg = 'Failed to set password';
+                            try { const j = await resp.json(); if (j && j.detail) msg = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail); } catch(_) {}
+                            throw new Error(msg);
+                        }
+                        document.cookie = `admin_password=${pw}; path=/; max-age=86400; samesite=lax`;
+                        window.location.replace('/admin');
+                    } catch (e) {
+                        err.textContent = e.message || String(e);
+                    }
+                }
+            </script>
+        </head>
+        <body>
+            <div class="setup-card">
+                <h2>🔧 Initial Admin Setup</h2>
+                <p>Create a secure password for your admin dashboard.</p>
+                <form onsubmit="handleSetupSubmit(event)">
+                    <input type="password" id="password" placeholder="New Password" required autofocus>
+                    <input type="password" id="password2" placeholder="Confirm Password" required style="margin-top:10px;">
+                    <button type="submit">Set Password</button>
+                    <div id="error" class="error"></div>
+                </form>
+            </div>
+        </body>
+    </html>
+    """
+
+
 def info(content: str) -> str:
     return f"""<!DOCTYPE html>
     <html>
@@ -233,7 +316,7 @@ def admin_auth() -> str:
     except Exception:
         admin_pw = os.getenv("ADMIN_PASSWORD", "")
     if admin_pw == "":
-        return info("Please set a secure ADMIN_PASSWORD= in your ENV variables.")
+        return setup_form()
     else:
         return login_form()
 
