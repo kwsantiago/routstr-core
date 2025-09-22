@@ -988,6 +988,10 @@ DASHBOARD_MODELS_JS: str = """<!--html-->
             if (event.target == createModal) {
                 closeCreateModel();
             }
+            const batchModal = document.getElementById('model-batch-modal');
+            if (event.target == batchModal) {
+                closeBatchModal();
+            }
         }
 
         function openCreateModel() {
@@ -1089,6 +1093,71 @@ DASHBOARD_MODELS_JS: str = """<!--html-->
                 btn.textContent = '➕ Create';
             }
         }
+
+        function openBatchModal() {
+            const modal = document.getElementById('model-batch-modal');
+            if (!modal) { alert('Batch modal not found'); return; }
+            const err = document.getElementById('batch-error');
+            if (err) { err.style.display = 'none'; err.textContent = ''; }
+            const textarea = document.getElementById('batch-json');
+            if (textarea && !textarea.value.trim()) {
+                const sample = {
+                    models: [
+                        {
+                            id: 'provider/model-id',
+                            name: 'Model Name',
+                            description: 'Description',
+                            created: Math.floor(Date.now()/1000),
+                            context_length: 0,
+                            architecture: { modality: 'text', input_modalities: ['text'], output_modalities: ['text'], tokenizer: '', instruct_type: null },
+                            pricing: { prompt: 0.0, completion: 0.0, request: 0.0, image: 0.0, web_search: 0.0, internal_reasoning: 0.0 },
+                            per_request_limits: null,
+                            top_provider: null
+                        }
+                    ]
+                };
+                textarea.value = JSON.stringify(sample, null, 2);
+            }
+            modal.style.display = 'block';
+        }
+
+        function closeBatchModal() {
+            const modal = document.getElementById('model-batch-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function performBatchAdd() {
+            const textarea = document.getElementById('batch-json');
+            const err = document.getElementById('batch-error');
+            const btn = document.getElementById('batch-submit-btn');
+            if (err) { err.style.display = 'none'; err.textContent = ''; }
+            if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+            try {
+                if (!textarea) throw new Error('Input not found');
+                const data = JSON.parse(textarea.value);
+                if (!data || !Array.isArray(data.models) || data.models.length === 0) {
+                    throw new Error('Payload must include a non-empty "models" array');
+                }
+                const resp = await fetch('/admin/api/models/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(data)
+                });
+                if (!resp.ok) {
+                    let errText = 'Failed to add models';
+                    try { const e = await resp.json(); if (e && e.detail) errText = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail); } catch(_) {}
+                    throw new Error(errText);
+                }
+                closeBatchModal();
+                await fetchModels();
+            } catch (e) {
+                if (err) { err.style.display = 'block'; err.textContent = e.message || String(e); }
+                else { alert(e.message || String(e)); }
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '➕ Add Models'; }
+            }
+        }
     </script>
 """
 
@@ -1126,6 +1195,7 @@ def models_page() -> str:
                 </table>
                 <div style="margin-top: 12px; display:flex; justify-content:flex-end;">
                     <button onclick="deleteAllModels()" style="background:#e53e3e;">🗑️ Delete All</button>
+                    <button onclick="openBatchModal()" style="background:#4a5568;">📥 Batch Add</button>
                 </div>
             </div>
 
@@ -1204,6 +1274,20 @@ def models_page() -> str:
                     </div>
                 </div>
             </div>
+
+            <div id="model-batch-modal" class="modal">
+                <div class="modal-content" style="max-width: 840px;">
+                    <span class="close" onclick="closeBatchModal()">&times;</span>
+                    <h3>Batch Add Models</h3>
+                    <p style="font-size: 0.9rem; color: #718096; margin: 6px 0 10px;">Paste JSON in the format like models.example.json</p>
+                    <div id="batch-error" style="display:none; margin: 10px 0; color:#e53e3e;"></div>
+                    <textarea id="batch-json" style="width:100%; min-height: 320px; font-family: 'Monaco', monospace; font-size: 13px; background:#f8fafc; color:#2d3748; padding: 12px; border: 2px solid #e2e8f0; border-radius: 6px;"></textarea>
+                    <div style="margin-top: 12px; display:flex; gap:10px;">
+                        <button id="batch-submit-btn" onclick="performBatchAdd()">➕ Add Models</button>
+                        <button onclick="closeBatchModal()" style="background-color:#718096;">Cancel</button>
+                    </div>
+                </div>
+            </div>
         </body>
     </html>
     """
@@ -1259,6 +1343,56 @@ async def create_model_admin_api(payload: Model) -> dict[str, object]:
 
     created_model = await get_model_by_id(payload.id)
     return created_model.dict() if created_model else {"id": payload.id}  # type: ignore
+
+
+@admin_router.post("/api/models/batch", dependencies=[Depends(require_admin_api)])
+async def batch_create_models(payload: dict[str, object]) -> dict[str, int]:
+    models = payload.get("models")
+    if not isinstance(models, list) or not models:
+        raise HTTPException(
+            status_code=400, detail="Payload must include non-empty 'models' array"
+        )
+    created = 0
+    skipped = 0
+    async with create_session() as session:
+        for m in models:
+            try:
+                model = Model(**m)  # type: ignore[arg-type]
+            except Exception:
+                skipped += 1
+                continue
+            exists = await session.get(ModelRow, model.id)
+            if exists:
+                skipped += 1
+                continue
+            pricing_dict = model.pricing.dict()
+            for k in ("max_prompt_cost", "max_completion_cost", "max_cost"):
+                pricing_dict.pop(k, None)
+            row = ModelRow(
+                id=model.id,
+                name=model.name,
+                description=model.description,
+                created=int(model.created),
+                context_length=int(model.context_length),
+                architecture=json.dumps(model.architecture.dict()),
+                pricing=json.dumps(pricing_dict),
+                sats_pricing=None,
+                per_request_limits=(
+                    json.dumps(model.per_request_limits)
+                    if model.per_request_limits is not None
+                    else None
+                ),
+                top_provider=(
+                    json.dumps(model.top_provider.dict())
+                    if model.top_provider
+                    else None
+                ),
+            )
+            session.add(row)
+            created += 1
+        if created:
+            await session.commit()
+    return {"created": created, "skipped": skipped}
 
 
 @admin_router.get(
