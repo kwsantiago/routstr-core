@@ -152,14 +152,19 @@ async def refund_wallet_endpoint(
     key: ApiKey = await validate_bearer_key(bearer_value, session)
     remaining_balance_msats: int = key.balance
 
-    if remaining_balance_msats <= 0:
+    if key.refund_currency == "sat":
+        remaining_balance = remaining_balance_msats // 1000
+    else:
+        remaining_balance = remaining_balance_msats
+    
+    if remaining_balance_msats > 0 and remaining_balance <= 0:
+        raise HTTPException(status_code=400, detail="Balance too small to refund")
+    elif remaining_balance <= 0:
         raise HTTPException(status_code=400, detail="No balance to refund")
 
     # Perform refund operation first, before modifying balance
     try:
         if key.refund_address:
-            if key.refund_currency == "sat":
-                remaining_balance = remaining_balance_msats // 1000
             from .core.settings import settings as global_settings
 
             await send_to_lnurl(
@@ -170,14 +175,9 @@ async def refund_wallet_endpoint(
             )
             result = {"recipient": key.refund_address}
         else:
-            refund_amount = (
-                remaining_balance_msats // 1000
-                if key.refund_currency == "sat"
-                else remaining_balance_msats
-            )
             refund_currency = key.refund_currency or "sat"
             token = await send_token(
-                refund_amount, refund_currency, key.refund_mint_url
+                remaining_balance, refund_currency, key.refund_mint_url
             )
             result = {"token": token}
 
