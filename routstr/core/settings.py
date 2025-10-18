@@ -64,7 +64,7 @@ class Settings(BaseSettings):
         default=120, env="PRICING_REFRESH_INTERVAL_SECONDS"
     )
     models_refresh_interval_seconds: int = Field(
-        default=0, env="MODELS_REFRESH_INTERVAL_SECONDS"
+        default=360, env="MODELS_REFRESH_INTERVAL_SECONDS"
     )
     enable_pricing_refresh: bool = Field(default=True, env="ENABLE_PRICING_REFRESH")
     enable_models_refresh: bool = Field(default=True, env="ENABLE_MODELS_REFRESH")
