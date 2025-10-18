@@ -1,4 +1,5 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -30,7 +31,10 @@ from .settings import settings as global_settings
 setup_logging()
 logger = get_logger(__name__)
 
-__version__ = "0.1.4-dev"
+if os.getenv("VERSION_SUFFIX") is not None:
+    __version__ = f"0.1.4-{os.getenv('VERSION_SUFFIX')}"
+else:
+    __version__ = "0.1.4"
 
 
 @asynccontextmanager
