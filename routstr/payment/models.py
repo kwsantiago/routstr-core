@@ -199,12 +199,19 @@ def _model_to_row_payload(model: Model) -> dict[str, str | int | None]:
 
     # Create adjusted pricing with fees applied
     adjusted_pricing = model.pricing.dict()
-    for key in ['prompt', 'completion', 'request', 'image', 'web_search', 'internal_reasoning']:
+    for key in [
+        "prompt",
+        "completion",
+        "request",
+        "image",
+        "web_search",
+        "internal_reasoning",
+    ]:
         if key in adjusted_pricing:
             adjusted_pricing[key] = adjusted_pricing[key] * total_fee_multiplier
 
     # Also adjust max costs if present
-    for key in ['max_prompt_cost', 'max_completion_cost', 'max_cost']:
+    for key in ["max_prompt_cost", "max_completion_cost", "max_cost"]:
         if key in adjusted_pricing:
             adjusted_pricing[key] = adjusted_pricing[key] * total_fee_multiplier
 
