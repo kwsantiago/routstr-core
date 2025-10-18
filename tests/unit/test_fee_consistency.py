@@ -96,7 +96,9 @@ def test_exchange_fee_applied_to_usd_pricing(standard_model: Model) -> None:
 
             # Verify all pricing fields have exchange fee applied
             assert pricing["prompt"] == pytest.approx(0.001 * exchange_fee, rel=1e-9)
-            assert pricing["completion"] == pytest.approx(0.002 * exchange_fee, rel=1e-9)
+            assert pricing["completion"] == pytest.approx(
+                0.002 * exchange_fee, rel=1e-9
+            )
             assert pricing["request"] == pytest.approx(0.01 * exchange_fee, rel=1e-9)
             assert pricing["image"] == pytest.approx(0.05 * exchange_fee, rel=1e-9)
             assert pricing["web_search"] == pytest.approx(0.03 * exchange_fee, rel=1e-9)
@@ -227,17 +229,11 @@ def test_default_fee_values_from_settings(standard_model: Model) -> None:
     assert pricing["request"] > standard_model.pricing.request
 
     # Verify exact values with default fees
-    assert pricing["prompt"] == pytest.approx(
-        0.001 * expected_multiplier, rel=1e-9
-    )
-    assert pricing["completion"] == pytest.approx(
-        0.002 * expected_multiplier, rel=1e-9
-    )
+    assert pricing["prompt"] == pytest.approx(0.001 * expected_multiplier, rel=1e-9)
+    assert pricing["completion"] == pytest.approx(0.002 * expected_multiplier, rel=1e-9)
     assert pricing["request"] == pytest.approx(0.01 * expected_multiplier, rel=1e-9)
     assert pricing["image"] == pytest.approx(0.05 * expected_multiplier, rel=1e-9)
-    assert pricing["web_search"] == pytest.approx(
-        0.03 * expected_multiplier, rel=1e-9
-    )
+    assert pricing["web_search"] == pytest.approx(0.03 * expected_multiplier, rel=1e-9)
     assert pricing["internal_reasoning"] == pytest.approx(
         0.015 * expected_multiplier, rel=1e-9
     )
@@ -727,20 +723,14 @@ def test_fee_consistency_across_all_fields(standard_model: Model) -> None:
 
             # All multipliers should be identical and equal to expected multiplier
             assert prompt_multiplier == pytest.approx(expected_multiplier, rel=1e-9)
-            assert completion_multiplier == pytest.approx(
-                expected_multiplier, rel=1e-9
-            )
+            assert completion_multiplier == pytest.approx(expected_multiplier, rel=1e-9)
             assert request_multiplier == pytest.approx(expected_multiplier, rel=1e-9)
             assert image_multiplier == pytest.approx(expected_multiplier, rel=1e-9)
-            assert web_search_multiplier == pytest.approx(
-                expected_multiplier, rel=1e-9
-            )
+            assert web_search_multiplier == pytest.approx(expected_multiplier, rel=1e-9)
             assert internal_reasoning_multiplier == pytest.approx(
                 expected_multiplier, rel=1e-9
             )
-            assert max_prompt_multiplier == pytest.approx(
-                expected_multiplier, rel=1e-9
-            )
+            assert max_prompt_multiplier == pytest.approx(expected_multiplier, rel=1e-9)
             assert max_completion_multiplier == pytest.approx(
                 expected_multiplier, rel=1e-9
             )

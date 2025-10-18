@@ -359,15 +359,15 @@ async def test_all_info_endpoints_no_database_changes(
 
         # Check no database changes after each request
         diff = await db_snapshot.diff()
-        assert len(diff["api_keys"]["added"]) == 0, (
-            f"Endpoint {endpoint} added API keys"
-        )
-        assert len(diff["api_keys"]["removed"]) == 0, (
-            f"Endpoint {endpoint} removed API keys"
-        )
-        assert len(diff["api_keys"]["modified"]) == 0, (
-            f"Endpoint {endpoint} modified API keys"
-        )
+        assert (
+            len(diff["api_keys"]["added"]) == 0
+        ), f"Endpoint {endpoint} added API keys"
+        assert (
+            len(diff["api_keys"]["removed"]) == 0
+        ), f"Endpoint {endpoint} removed API keys"
+        assert (
+            len(diff["api_keys"]["modified"]) == 0
+        ), f"Endpoint {endpoint} modified API keys"
 
     # Final verification - database state should be identical
     final_state = await db_snapshot.capture()
