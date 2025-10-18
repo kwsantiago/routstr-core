@@ -234,7 +234,7 @@ class SettingsService:
 
             merged_dict: dict[str, Any] = dict(env_resolved.dict())
             merged_dict.update(
-                {k: v for k, v in db_json.items() if v not in (None, "")}
+                {k: v for k, v in db_json.items() if v not in (None, "", []) and v}
             )
 
             # Ensure primary_mint is consistent with cashu_mints if not explicitly set
