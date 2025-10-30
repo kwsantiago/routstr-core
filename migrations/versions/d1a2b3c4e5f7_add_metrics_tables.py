@@ -23,15 +23,21 @@ def upgrade() -> None:
         sa.Column("total_sats", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("total_requests", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("per_model_spend", sa.String(), nullable=False, server_default="{}"),
-        sa.Column("per_model_requests", sa.String(), nullable=False, server_default="{}"),
-        sa.Column("published_to_nostr", sa.Boolean(), nullable=False, server_default="0"),
+        sa.Column(
+            "per_model_requests", sa.String(), nullable=False, server_default="{}"
+        ),
+        sa.Column(
+            "published_to_nostr", sa.Boolean(), nullable=False, server_default="0"
+        ),
         sa.Column("created_at", sa.Integer(), nullable=False),
         sa.Column("updated_at", sa.Integer(), nullable=False),
     )
 
     op.create_table(
         "request_metrics",
-        sa.Column("id", sa.Integer(), primary_key=True, nullable=False, autoincrement=True),
+        sa.Column(
+            "id", sa.Integer(), primary_key=True, nullable=False, autoincrement=True
+        ),
         sa.Column("timestamp", sa.Integer(), nullable=False),
         sa.Column("model_id", sa.String(), nullable=False),
         sa.Column("sats_spent", sa.Integer(), nullable=False),

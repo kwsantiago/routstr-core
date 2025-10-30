@@ -8,6 +8,7 @@ from sqlmodel import col, update
 from .core import get_logger
 from .core.db import ApiKey, AsyncSession
 from .core.settings import settings
+from .metrics import track_request_metric
 from .payment.cost_caculation import (
     CostData,
     CostDataError,
@@ -466,6 +467,9 @@ async def adjust_payment_for_tokens(
                         "model": model,
                     },
                 )
+                await track_request_metric(
+                    session, model, cost.total_msats // 1000, key.hashed_key
+                )
             return cost.dict()
 
         case CostData() as cost:
@@ -505,6 +509,9 @@ async def adjust_payment_for_tokens(
                 await session.exec(finalize_stmt)  # type: ignore[call-overload]
                 await session.commit()
                 await session.refresh(key)
+                await track_request_metric(
+                    session, model, total_cost_msats // 1000, key.hashed_key
+                )
                 return cost.dict()
 
             # this should never happen why do we handle this???
@@ -546,6 +553,9 @@ async def adjust_payment_for_tokens(
                             "new_balance": key.balance,
                             "model": model,
                         },
+                    )
+                    await track_request_metric(
+                        session, model, total_cost_msats // 1000, key.hashed_key
                     )
                 else:
                     logger.warning(
@@ -608,6 +618,9 @@ async def adjust_payment_for_tokens(
                         "final_cost": cost.total_msats,
                         "model": model,
                     },
+                )
+                await track_request_metric(
+                    session, model, total_cost_msats // 1000, key.hashed_key
                 )
 
             return cost.dict()
